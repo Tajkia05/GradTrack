@@ -6,12 +6,24 @@
 //   Send data:  await api("/auth/login", { method: "POST", body: JSON.stringify({ ... }) });
 
 // ---------- Saving the login token ----------
-// After login, the backend gives us a token. We keep it in the browser's
-// localStorage so the user stays logged in even after refreshing the page.
+// After login, the backend gives us a token. Where we keep it depends on "Remember me":
+//   ticked     → localStorage:   kept even after the browser is closed (token lasts 7 days)
+//   not ticked → sessionStorage: kept while this tab is open, deleted when it closes
+// Both survive a page refresh.
 const TOKEN_KEY = "gradtrack_token";
-export const getToken = () => localStorage.getItem(TOKEN_KEY);
-export const saveToken = (token) => localStorage.setItem(TOKEN_KEY, token);
-export const clearToken = () => localStorage.removeItem(TOKEN_KEY);
+
+export const getToken = () =>
+  localStorage.getItem(TOKEN_KEY) ?? sessionStorage.getItem(TOKEN_KEY);
+
+export const saveToken = (token, remember = false) => {
+  clearToken(); // remove any old token first, so there is only ever one
+  (remember ? localStorage : sessionStorage).setItem(TOKEN_KEY, token);
+};
+
+export const clearToken = () => {
+  localStorage.removeItem(TOKEN_KEY);
+  sessionStorage.removeItem(TOKEN_KEY);
+};
 
 export async function api(path, options = {}) {
   const token = getToken();

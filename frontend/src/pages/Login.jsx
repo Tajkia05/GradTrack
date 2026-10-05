@@ -17,6 +17,7 @@ export default function Login() {
   const [role, setRole] = useState("student");       // which role button is selected
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [remember, setRemember] = useState(false);   // "Remember me" checkbox
   const [error, setError] = useState("");            // error message to show in red
   const [submitting, setSubmitting] = useState(false); // true while waiting for the backend
 
@@ -29,7 +30,7 @@ export default function Login() {
     setError("");
     setSubmitting(true);
     try {
-      const loggedInUser = await login(email, password, role);
+      const loggedInUser = await login(email, password, role, remember);
       navigate(`/${loggedInUser.role}`, { replace: true });
     } catch (err) {
       setError(err.message); // e.g. "Invalid email or password"
@@ -67,6 +68,19 @@ export default function Login() {
         onChange={(e) => setPassword(e.target.value)}
         className="mb-3 w-full rounded-lg border border-line bg-ink px-3 py-2 text-white outline-none transition focus:border-sage focus:ring-2 focus:ring-sage/30"
       />
+
+      {/* "Remember me": ticked = stay logged in for 7 days, even after closing the browser.
+          Not ticked = logged out when the browser tab is closed. */}
+      <label htmlFor="remember" className="mb-4 flex w-fit cursor-pointer items-center gap-2 text-sm text-mist">
+        <input
+          id="remember"
+          type="checkbox"
+          checked={remember}
+          onChange={(e) => setRemember(e.target.checked)}
+          className="h-4 w-4 cursor-pointer accent-sage"
+        />
+        Remember me
+      </label>
 
       {/* Only shown when login failed. */}
       {error && <p className="mb-3 text-sm text-red-400">{error}</p>}

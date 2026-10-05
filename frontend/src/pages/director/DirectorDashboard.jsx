@@ -7,8 +7,8 @@
 export default function DirectorDashboard() {
   return (
     <div>
-      <h1 className="text-2xl font-bold">Director Dashboard</h1>
-      <p className="mt-2 text-gray-600">TODO</p>
+      <h1 className="font-display text-3xl font-bold text-white">Director Dashboard</h1>
+      <p className="mt-2 text-mist/60">TODO</p>
     </div>
   );
 }

@@ -29,9 +29,14 @@ def verify_password(plain_password: str, password_hash: str) -> bool:
     return _password_hasher.verify(plain_password, password_hash)
 
 
-def create_access_token(user_id: int, role: str) -> str:
-    """Make a signed token that says "this is user X with role Y", valid for a limited time."""
-    expires_at = datetime.now(timezone.utc) + timedelta(minutes=settings.jwt_expire_minutes)
+def create_access_token(user_id: int, role: str, remember: bool = False) -> str:
+    """Make a signed token that says "this is user X with role Y", valid for a limited time.
+    remember=True ("Remember me" ticked) makes it last days instead of minutes."""
+    if remember:
+        lifetime = timedelta(days=settings.jwt_remember_days)
+    else:
+        lifetime = timedelta(minutes=settings.jwt_expire_minutes)
+    expires_at = datetime.now(timezone.utc) + lifetime
     payload = {
         "sub": str(user_id),  # "sub" (subject) = who this token belongs to
         "role": role,

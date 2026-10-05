@@ -15,6 +15,7 @@ class LoginRequest(BaseModel):
     email: str
     password: str
     role: Role  # which button they picked: student / faculty / program_director
+    remember_me: bool = False  # ticked → the login lasts 7 days instead of 60 minutes
 
 
 class RegisterRequest(BaseModel):

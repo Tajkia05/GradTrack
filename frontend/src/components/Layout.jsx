@@ -24,40 +24,49 @@ export default function Layout() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-ink text-mist">
       {/* ---------- The navbar (top bar) ---------- */}
-      <nav className="flex items-center gap-6 border-b bg-white px-6 py-3">
-        <span className="font-bold text-indigo-700">GradTrack</span>
-
-        {/* Only the links for this user's role. */}
-        {LINKS_BY_ROLE[user.role].map((l) => (
-          <NavLink
-            key={l.to}
-            to={l.to}
-            // Highlight the link of the page we are currently on.
-            className={({ isActive }) =>
-              isActive ? "font-medium text-indigo-700" : "text-gray-600"
-            }
-          >
-            {l.label}
-          </NavLink>
-        ))}
-
-        {/* Right side: who is logged in + log out button. "ml-auto" pushes it to the right. */}
-        <div className="ml-auto flex items-center gap-3 text-sm">
-          <span className="text-gray-700">
-            {user.full_name} <span className="text-gray-400">({roleLabel(user.role)})</span>
+      <nav className="border-b border-line bg-ink/80">
+        <div className="mx-auto flex max-w-5xl flex-wrap items-center gap-x-6 gap-y-2 px-4 py-3">
+          {/* The name, with a small glowing "lamp" dot. */}
+          <span className="flex items-center gap-2 font-display text-lg font-bold text-white">
+            <span className="h-2 w-2 rounded-full bg-sage shadow-[0_0_8px_2px_rgb(156_194_154/0.6)]" aria-hidden="true" />
+            GradTrack
           </span>
-          <button onClick={handleLogout} className="rounded border px-3 py-1 hover:bg-gray-100">
-            Log out
-          </button>
+
+          {/* Only the links for this user's role. */}
+          {LINKS_BY_ROLE[user.role].map((l) => (
+            <NavLink
+              key={l.to}
+              to={l.to}
+              // Highlight the link of the page we are currently on.
+              className={({ isActive }) =>
+                "text-sm transition-colors " + (isActive ? "font-medium text-sage" : "text-mist/70 hover:text-white")
+              }
+            >
+              {l.label}
+            </NavLink>
+          ))}
+
+          {/* Right side: who is logged in + log out button. "ml-auto" pushes it to the right. */}
+          <div className="ml-auto flex items-center gap-3 text-sm">
+            <span className="text-mist">
+              {user.full_name} <span className="text-mist/50">({roleLabel(user.role)})</span>
+            </span>
+            <button
+              onClick={handleLogout}
+              className="rounded-lg border border-line px-3 py-1 text-mist transition-colors hover:border-sage hover:text-white"
+            >
+              Log out
+            </button>
+          </div>
         </div>
       </nav>
 
       {/* ---------- The current page ---------- */}
       {/* <Outlet /> is a placeholder: React Router puts the matching page here
           (for example StudentDashboard when the URL is /student). */}
-      <main className="mx-auto max-w-5xl p-6">
+      <main className="mx-auto max-w-5xl px-4 py-8">
         <Outlet />
       </main>
     </div>

@@ -4,7 +4,7 @@
 // This box holds:
 //   user     → the logged-in user { id, email, full_name, role }, or null if logged out
 //   loading  → true while we are still checking if someone is logged in
-//   login()    → log in with email + password + role
+//   login()    → log in with email + password + role (+ "Remember me")
 //   register() → create a new account (and log in)
 //   logout()   → log out
 //
@@ -35,20 +35,21 @@ export function AuthProvider({ children }) {
 
   // After login OR registration, the backend sends back { access_token, user }.
   // Save the token and remember the user.
-  function startSession(data) {
-    saveToken(data.access_token);
+  // remember = "Remember me" was ticked → keep the token after the browser closes.
+  function startSession(data, remember = false) {
+    saveToken(data.access_token, remember);
     setUser(data.user);
     return data.user;
   }
 
-  // Send email + password + chosen role to the backend.
+  // Send email + password + chosen role (+ "Remember me") to the backend.
   // If wrong, this throws an error with the backend's message (e.g. "Invalid email or password").
-  async function login(email, password, role) {
+  async function login(email, password, role, remember = false) {
     const data = await api("/auth/login", {
       method: "POST",
-      body: JSON.stringify({ email, password, role }),
+      body: JSON.stringify({ email, password, role, remember_me: remember }),
     });
-    return startSession(data);
+    return startSession(data, remember);
   }
 
   // Create a new account. The backend logs the new user in right away.

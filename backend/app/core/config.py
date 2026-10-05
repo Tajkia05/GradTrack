@@ -18,6 +18,8 @@ class Settings(BaseSettings):
     jwt_secret: str = "dev-only-secret-change-me"
     # How long a login lasts before the user must log in again.
     jwt_expire_minutes: int = 60
+    # How long a login lasts when "Remember me" is ticked.
+    jwt_remember_days: int = 7
 
     # Values in .env override the defaults above.
     model_config = SettingsConfigDict(env_file=".env")

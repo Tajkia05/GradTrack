@@ -7,8 +7,8 @@
 export default function StudentDashboard() {
   return (
     <div>
-      <h1 className="text-2xl font-bold">Student Dashboard</h1>
-      <p className="mt-2 text-gray-600">TODO</p>
+      <h1 className="font-display text-3xl font-bold text-white">Student Dashboard</h1>
+      <p className="mt-2 text-mist/60">TODO</p>
     </div>
   );
 }

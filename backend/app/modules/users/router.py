@@ -15,9 +15,9 @@ from app.modules.users.schemas import LoginRequest, RegisterRequest, TokenOut, U
 router = APIRouter(tags=["Auth & Users"])
 
 
-def _token_response(user: User) -> TokenOut:
+def _token_response(user: User, remember: bool = False) -> TokenOut:
     """Make a token for this user and package it with their info."""
-    token = create_access_token(user.id, user.role.value)
+    token = create_access_token(user.id, user.role.value, remember)
     return TokenOut(access_token=token, user=UserOut.model_validate(user))
 
 
@@ -57,7 +57,7 @@ def login(body: LoginRequest, db: Session = Depends(get_db)):
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Please make sure you have chosen the correct role and try again.",
         )
-    return _token_response(user)
+    return _token_response(user, remember=body.remember_me)
 
 
 # GET /api/users/me — "who am I?" Needs a token.
