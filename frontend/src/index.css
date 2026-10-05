@@ -1,0 +1,94 @@
+/* index.css — global styles for the whole app.
+   The first line turns on Tailwind, so we can style things with class names
+   like "text-xl font-bold" directly in our JSX instead of writing CSS here. */
+@import "tailwindcss";
+
+/* Our own font and colors. Each line creates Tailwind classes, for example:
+   --font-display → "font-display"
+   --color-sage   → "bg-sage", "text-sage", "border-sage", "ring-sage" ... */
+@theme {
+  --font-display: "Bricolage Grotesque", ui-sans-serif, system-ui, sans-serif;
+
+  --color-ink: #0d1114;         /* page background (almost black, slightly green) */
+  --color-panel: #151a1e;       /* the form card */
+  --color-line: #2b343b;        /* borders */
+  --color-mist: #c9d3cc;        /* normal text on dark backgrounds */
+  --color-sage: #9cc29a;        /* the lamp's green: buttons, links, highlights */
+  --color-sage-light: #b5d6b2;  /* button hover */
+}
+
+/* ---------- Lamp sign-in screen (used by components/AuthShell.jsx) ---------- */
+/* Everything below starts switched OFF, and turns on when the page has the "is-lit" class. */
+
+/* Left half: a faint warm glow fades in around the lamp. */
+.lamp-room::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(ellipse 60% 55% at 50% 55%, rgb(245 241 210 / 0.08), transparent 70%);
+  opacity: 0;
+  transition: opacity 700ms ease;
+}
+.is-lit .lamp-room::before { opacity: 1; }
+
+/* Right half: slightly darker than the left while the lamp is off. */
+.lamp-stage { background: #0a0d10; }
+
+/* The soft green light on the right half. */
+.lamp-light {
+  position: absolute;
+  inset: 0;
+  pointer-events: none; /* the light must not block clicks on the form */
+  opacity: 0;
+  transition: opacity 700ms ease;
+  /* On phones the lamp is ABOVE the form, so the glow comes from the top. */
+  background: radial-gradient(ellipse 110% 70% at 50% 0%, rgb(156 194 154 / 0.2), transparent 75%);
+}
+@media (min-width: 768px) {
+  /* On wider screens the lamp is on the LEFT, so the glow comes from the left edge. */
+  .lamp-light { background: radial-gradient(ellipse 90% 80% at 0% 50%, rgb(156 194 154 / 0.18), transparent 75%); }
+}
+
+/* The glowing line between the two halves (on top of phones: along the top edge). */
+.lamp-edge {
+  position: absolute;
+  left: 0; right: 0; top: 0;
+  height: 1px;
+  background: var(--color-sage);
+  opacity: 0;
+  box-shadow: 0 0 18px 2px rgb(156 194 154 / 0.6);
+  transition: opacity 700ms ease;
+}
+@media (min-width: 768px) {
+  .lamp-edge { right: auto; bottom: 0; width: 1px; height: auto; }
+}
+.is-lit .lamp-light,
+.is-lit .lamp-edge { opacity: 1; }
+
+/* The form card: dark, with a soft green glow around it. */
+.auth-card {
+  background: var(--color-panel);
+  border: 1px solid rgb(156 194 154 / 0.25);
+  box-shadow: 0 0 0 1px rgb(0 0 0 / 0.2), 0 20px 60px -20px rgb(0 0 0 / 0.6), 0 0 50px -10px rgb(156 194 154 / 0.25);
+}
+
+/* The form appears just after the light: fade in and rise a little. */
+@keyframes lamp-reveal {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.lamp-reveal { animation: lamp-reveal 600ms ease 250ms both; }
+
+/* While the lamp is off, the pull-cord handle gently pulses to say "click me". */
+@keyframes lamp-hint {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.4; }
+}
+.lamp-hint { animation: lamp-hint 1.8s ease-in-out infinite; }
+
+/* People who turned off animations in their computer settings get no motion. */
+@media (prefers-reduced-motion: reduce) {
+  .lamp-light, .lamp-edge, .lamp-room::before { transition: none; }
+  .lamp-reveal, .lamp-hint { animation: none; }
+}

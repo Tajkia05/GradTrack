@@ -1,0 +1,79 @@
+// AuthContext.jsx — REMEMBERS WHO IS LOGGED IN, FOR THE WHOLE APP.
+//
+// A "context" is a shared box of data that any page can open.
+// This box holds:
+//   user     → the logged-in user { id, email, full_name, role }, or null if logged out
+//   loading  → true while we are still checking if someone is logged in
+//   login()    → log in with email + password + role
+//   register() → create a new account (and log in)
+//   logout()   → log out
+//
+// Any page can use it like this:
+//   const { user, logout } = useAuth();
+
+import { createContext, useContext, useEffect, useState } from "react";
+import { api, clearToken, getToken, saveToken } from "../api/client.js";
+
+const AuthContext = createContext(null);
+
+export function AuthProvider({ children }) {
+  const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  // When the app first opens (or the page is refreshed): if we have a saved token,
+  // ask the backend "who am I?" so the user stays logged in.
+  useEffect(() => {
+    if (!getToken()) {
+      setLoading(false);
+      return;
+    }
+    api("/users/me")
+      .then(setUser)
+      .catch(() => clearToken()) // token no longer works → forget it
+      .finally(() => setLoading(false));
+  }, []);
+
+  // After login OR registration, the backend sends back { access_token, user }.
+  // Save the token and remember the user.
+  function startSession(data) {
+    saveToken(data.access_token);
+    setUser(data.user);
+    return data.user;
+  }
+
+  // Send email + password + chosen role to the backend.
+  // If wrong, this throws an error with the backend's message (e.g. "Invalid email or password").
+  async function login(email, password, role) {
+    const data = await api("/auth/login", {
+      method: "POST",
+      body: JSON.stringify({ email, password, role }),
+    });
+    return startSession(data);
+  }
+
+  // Create a new account. The backend logs the new user in right away.
+  // If it fails, this throws an error (e.g. "An account with this email already exists").
+  async function register(fullName, email, password, role) {
+    const data = await api("/auth/register", {
+      method: "POST",
+      body: JSON.stringify({ full_name: fullName, email, password, role }),
+    });
+    return startSession(data);
+  }
+
+  function logout() {
+    clearToken();
+    setUser(null);
+  }
+
+  return (
+    <AuthContext.Provider value={{ user, loading, login, register, logout }}>
+      {children}
+    </AuthContext.Provider>
+  );
+}
+
+// Shortcut so pages can write useAuth() instead of useContext(AuthContext).
+export function useAuth() {
+  return useContext(AuthContext);
+}
