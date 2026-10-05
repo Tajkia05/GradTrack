@@ -14,6 +14,7 @@
 import { useState } from "react";
 import { Outlet } from "react-router-dom";
 import Lamp from "./Lamp.jsx";
+import logo from "../assets/gradtrack-logo.png";
 
 // Remember "the lamp is on" for this browser tab, so a refresh doesn't switch it off.
 // (Wrapped in try/catch because some browsers block storage — then we just forget.)
@@ -40,8 +41,9 @@ export default function AuthShell() {
       {/* ---------- LEFT: GradTrack name + the lamp in the middle ---------- */}
       <section className="lamp-room relative flex flex-col items-center justify-center gap-6 px-6 pb-8 pt-10 md:w-1/2 md:p-12">
         <div className="text-center md:absolute md:left-12 md:top-10 md:text-left">
-          <p className="font-display text-3xl font-bold tracking-tight text-white md:text-4xl">GradTrack</p>
-          <p className="mt-1 text-sm text-mist/60">Graduate degree progress, in one place</p>
+          {/* The GradTrack logo (graduation cap + name). */}
+          <img src={logo} alt="GradTrack" className="mx-auto h-auto w-32 md:mx-0 md:w-40" />
+          <p className="mt-2 text-sm text-mist/60">Graduate degree progress, in one place</p>
         </div>
 
         <Lamp on={lampOn} onToggle={toggleLamp} />

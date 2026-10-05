@@ -5,6 +5,7 @@
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext.jsx";
 import { roleLabel } from "../auth/roles.js";
+import logoMark from "../assets/gradtrack-mark.png";
 
 // The navbar links for each role. Each user only sees their own role's links.
 // When a teammate adds a page, they add its link here under the right role.
@@ -28,9 +29,9 @@ export default function Layout() {
       {/* ---------- The navbar (top bar) ---------- */}
       <nav className="border-b border-line bg-ink/80">
         <div className="mx-auto flex max-w-5xl flex-wrap items-center gap-x-6 gap-y-2 px-4 py-3">
-          {/* The name, with a small glowing "lamp" dot. */}
+          {/* The logo: graduation cap + name. */}
           <span className="flex items-center gap-2 font-display text-lg font-bold text-white">
-            <span className="h-2 w-2 rounded-full bg-sage shadow-[0_0_8px_2px_rgb(156_194_154/0.6)]" aria-hidden="true" />
+            <img src={logoMark} alt="" className="h-7 w-auto" />
             GradTrack
           </span>
 
