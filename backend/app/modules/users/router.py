@@ -44,11 +44,18 @@ def register(body: RegisterRequest, db: Session = Depends(get_db)):
 # POST /api/auth/login — log in with email + password + the role button they picked.
 @router.post("/auth/login", response_model=TokenOut)
 def login(body: LoginRequest, db: Session = Depends(get_db)):
-    user = service.authenticate(db, body.email, body.password)
-    if user is None:
+    user, problem = service.authenticate(db, body.email, body.password)
+    # No account with this email.
+    if problem == service.NO_ACCOUNT:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid email or password",
+            detail="No account found with this email. Please create an account first.",
+        )
+    # The account exists, but the password is wrong.
+    if problem == service.WRONG_PASSWORD:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect password. Please try again.",
         )
     # Password is right, but they clicked the wrong role button.
     # The message does NOT say which role the account really has.
