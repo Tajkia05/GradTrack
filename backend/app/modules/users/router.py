@@ -9,7 +9,7 @@ from app.core.database import get_db
 from app.core.deps import get_current_user
 from app.core.security import create_access_token
 from app.modules.users import service
-from app.modules.users.models import User
+from app.modules.users.models import Role, User
 from app.modules.users.schemas import LoginRequest, RegisterRequest, TokenOut, UserOut
 
 router = APIRouter(tags=["Auth & Users"])
@@ -30,7 +30,14 @@ def register(body: RegisterRequest, db: Session = Depends(get_db)):
             status_code=status.HTTP_409_CONFLICT,
             detail="An account with this email already exists. Try logging in instead.",
         )
-    user = service.create_user(db, body.email, body.full_name.strip(), body.role, body.password)
+    # Enrollment and start semester are only saved for students.
+    is_student = body.role == Role.STUDENT
+    user = service.create_user(
+        db, body.email, body.full_name.strip(), body.role, body.password,
+        enrollment_status=body.enrollment_status if is_student else None,
+        start_term=body.start_term if is_student else None,
+        start_year=body.start_year if is_student else None,
+    )
     return _token_response(user)
 
 

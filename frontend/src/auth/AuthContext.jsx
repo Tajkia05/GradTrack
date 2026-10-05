@@ -53,10 +53,19 @@ export function AuthProvider({ children }) {
 
   // Create a new account. The backend logs the new user in right away.
   // If it fails, this throws an error (e.g. "An account with this email already exists").
-  async function register(fullName, email, password, role) {
+  // studentInfo is only for students: { enrollmentStatus, startTerm, startYear }.
+  async function register(fullName, email, password, role, studentInfo = {}) {
     const data = await api("/auth/register", {
       method: "POST",
-      body: JSON.stringify({ full_name: fullName, email, password, role }),
+      body: JSON.stringify({
+        full_name: fullName,
+        email,
+        password,
+        role,
+        enrollment_status: studentInfo.enrollmentStatus,
+        start_term: studentInfo.startTerm,
+        start_year: studentInfo.startYear,
+      }),
     });
     return startSession(data);
   }

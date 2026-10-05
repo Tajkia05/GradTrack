@@ -3,9 +3,11 @@
 # models.py  = how data is STORED in the database.
 # schemas.py = what the API ACCEPTS and RETURNS (FastAPI checks it automatically).
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field
+from datetime import date
 
-from app.modules.users.models import Role
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, model_validator
+
+from app.modules.users.models import EnrollmentStatus, Role, Term
 
 
 class LoginRequest(BaseModel):
@@ -21,6 +23,23 @@ class RegisterRequest(BaseModel):
     email: EmailStr                                       # must look like a real email (x@y.z)
     password: str = Field(min_length=8, max_length=128)   # at least 8 characters
     role: Role                                            # student / faculty / program_director
+
+    # ---- Students only (faculty and directors leave these out) ----
+    enrollment_status: EnrollmentStatus | None = None     # full_time / part_time
+    start_term: Term | None = None                        # fall / spring
+    start_year: int | None = Field(default=None, ge=1990) # e.g. 2026
+
+    @model_validator(mode="after")
+    def check_student_fields(self):
+        """Students MUST give enrollment and start semester. Others don't need them."""
+        if self.role == Role.STUDENT:
+            if self.enrollment_status is None:
+                raise ValueError("Please choose full-time or part-time.")
+            if self.start_term is None or self.start_year is None:
+                raise ValueError("Please choose the semester you started.")
+            if self.start_year > date.today().year + 1:
+                raise ValueError("The start year can't be that far in the future.")
+        return self
 
 
 class UserOut(BaseModel):

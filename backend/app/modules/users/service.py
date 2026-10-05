@@ -5,7 +5,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.security import hash_password, verify_password
-from app.modules.users.models import Role, User
+from app.modules.users.models import EnrollmentStatus, Role, Term, User
 
 
 def get_user_by_email(db: Session, email: str) -> User | None:
@@ -24,13 +24,25 @@ def authenticate(db: Session, email: str, password: str) -> User | None:
     return user
 
 
-def create_user(db: Session, email: str, full_name: str, role: Role, password: str) -> User:
+def create_user(
+    db: Session,
+    email: str,
+    full_name: str,
+    role: Role,
+    password: str,
+    enrollment_status: EnrollmentStatus | None = None,  # students only
+    start_term: Term | None = None,                     # students only
+    start_year: int | None = None,                      # students only
+) -> User:
     """Create a new user. The password is hashed before saving."""
     user = User(
         email=email.strip().lower(),
         full_name=full_name,
         role=role,
         password_hash=hash_password(password),
+        enrollment_status=enrollment_status,
+        start_term=start_term,
+        start_year=start_year,
     )
     db.add(user)
     db.commit()

@@ -2,8 +2,9 @@
 # Everyone who logs in (student, faculty, program director) is one row in this table.
 
 import enum
+from decimal import Decimal
 
-from sqlalchemy import Enum, String
+from sqlalchemy import Enum, ForeignKey, Numeric, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.database import Base
@@ -18,6 +19,18 @@ class Role(str, enum.Enum):
     DIRECTOR = "program_director"
 
 
+# Full-time or part-time. Part-time students get double the deadlines.
+class EnrollmentStatus(str, enum.Enum):
+    FULL_TIME = "full_time"
+    PART_TIME = "part_time"
+
+
+# The semester a student started in.
+class Term(str, enum.Enum):
+    SPRING = "spring"
+    FALL = "fall"
+
+
 class User(Base):
     __tablename__ = "users"
 
@@ -27,3 +40,15 @@ class User(Base):
     role: Mapped[Role] = mapped_column(Enum(Role))                            # student / faculty / program_director
     # The HASHED password (see core/security.py) — never the real password.
     password_hash: Mapped[str] = mapped_column(String(255))
+
+    # ---------- Student-only fields (left empty for faculty and directors) ----------
+    # Admitted with advanced standing? Decides deadlines and who can request transfer credit.
+    advanced_standing: Mapped[bool | None]
+    enrollment_status: Mapped[EnrollmentStatus | None] = mapped_column(Enum(EnrollmentStatus))
+    # When they started, e.g. FALL + 2023. Deadlines are counted in semesters from here.
+    start_term: Mapped[Term | None] = mapped_column(Enum(Term))
+    start_year: Mapped[int | None]
+    # Needed for candidacy (must be at least 3.00). Numeric(3, 2) = numbers like 3.60.
+    gpa: Mapped[Decimal | None] = mapped_column(Numeric(3, 2))
+    # The declared research advisor (points to a faculty member's row in this same table).
+    advisor_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"))
