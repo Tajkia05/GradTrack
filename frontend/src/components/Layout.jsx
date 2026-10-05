@@ -10,7 +10,7 @@ import logoMark from "../assets/gradtrack-mark.png";
 // The navbar links for each role. Each user only sees their own role's links.
 // When a teammate adds a page, they add its link here under the right role.
 const LINKS_BY_ROLE = {
-  student: [{ to: "/student", label: "Dashboard" }],
+  student: [{ to: "/student", label: "My progress" }],
   faculty: [{ to: "/faculty", label: "Dashboard" }],
   program_director: [{ to: "/program_director", label: "Dashboard" }],
 };
