@@ -101,7 +101,13 @@ export default function StudentDashboard() {
         <div>
           <p className="text-xs font-medium uppercase tracking-[0.18em] text-sage">Your degree, one step at a time</p>
           <h1 className="mt-2 font-display text-3xl font-bold text-white">My progress</h1>
-          <p className="mt-2 text-sm text-mist/65">Welcome back, {student.full_name}.</p>
+          <p className="mt-3 font-display text-xl font-medium text-mist sm:text-2xl">Welcome back, <span className="font-semibold text-white">{student.full_name}</span>.</p>
+          {student.advisor_name && (
+            <div className="mt-4 rounded-xl border border-sage/25 bg-sage/5 px-4 py-3">
+              <p className="text-xs font-medium uppercase tracking-wider text-sage">Your advisor</p>
+              <p className="mt-1 font-display text-lg font-semibold text-white sm:text-xl">{student.advisor_name}</p>
+            </div>
+          )}
         </div>
         <span className="rounded-full border border-line px-3 py-1.5 text-xs text-mist/70">
           {student.enrollment_status === "part_time" ? "Part-time" : student.enrollment_status === "full_time" ? "Full-time" : "Enrollment not set"}
@@ -114,6 +120,9 @@ export default function StudentDashboard() {
           <h2 id="progress-title" className="font-display text-lg font-semibold text-white">Program progress{student.program_year > 0 ? ` — Year ${student.program_year}` : student.program_year === 0 ? " — Not yet started" : ""}</h2>
           <p className="text-sm text-mist/70"><span className="font-semibold text-sage">{summary.completed}</span> of {summary.total} milestones</p>
         </div>
+        <p className="mt-3 text-base font-medium text-mist">
+          Progress as of <time dateTime={data.as_of} className="font-semibold text-sage">{formatDate(data.as_of)}</time>
+        </p>
         <div role="progressbar" aria-label="Approved milestones" aria-valuenow={summary.percent} aria-valuemin={0} aria-valuemax={100} aria-valuetext={`${summary.completed} of ${summary.total} milestones approved`} className="my-5 h-3 overflow-hidden rounded-full bg-ink">
           <div className="h-full rounded-full bg-sage" style={{ width: `${summary.percent}%` }} />
         </div>
@@ -186,7 +195,6 @@ export default function StudentDashboard() {
             <p className="mt-1 text-xs text-mist/50">Transfer credit requests are coming soon.</p>
           </div>}
         </div>
-        <p className="mt-4 text-xs text-mist/45">Progress as of {formatDate(data.as_of)}{student.advisor_name ? ` · Advisor: ${student.advisor_name}` : ""}</p>
       </footer>
     </div>
   );
