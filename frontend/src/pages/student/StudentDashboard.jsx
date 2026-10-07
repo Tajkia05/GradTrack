@@ -7,6 +7,7 @@ const STATUS_LABELS = {
   under_review: "In review", revision_requested: "Revision requested",
   approved: "Approved", rejected: "Rejected",
 };
+
 const SECTIONS = [
   { key: "current", title: "Current", description: "The milestones you’re working on now." },
   { key: "blocked", title: "Blocked", description: "Complete these prerequisites to move forward." },
@@ -66,6 +67,7 @@ export default function StudentDashboard() {
   const [error, setError] = useState("");
   const [attempt, setAttempt] = useState(0);
   const [showAllCompleted, setShowAllCompleted] = useState(false);
+  const [activeSection, setActiveSection] = useState("all");
 
   useEffect(() => {
     const controller = new AbortController();
@@ -87,6 +89,12 @@ export default function StudentDashboard() {
   if (!data) return <div role="status" className="rounded-2xl border border-line bg-panel p-8 text-mist/70">Loading your progress…</div>;
 
   const { student, summary, milestones } = data;
+
+  const visibleSections =
+    activeSection === "all"
+      ? SECTIONS
+      : SECTIONS.filter((section) => section.key === activeSection);
+
   return (
     <div className="space-y-7">
       <header className="flex flex-wrap items-end justify-between gap-4">
@@ -121,6 +129,30 @@ export default function StudentDashboard() {
         <p className="mt-4 text-xs leading-relaxed text-mist/50">{student.enrollment_status === "part_time" ? "Part-time deadlines are doubled; defense is capped at 8 years. " : ""}Deadlines are shown by academic semester.</p>
       </section>
 
+      <nav aria-label="Filter milestones by status" className="flex flex-wrap gap-2">
+        {["all", "current", "blocked", "upcoming", "completed"].map((key) => {
+          const count = key === "all" ? summary.total : summary[key];
+          const selected = activeSection === key;
+
+          return (
+            <button
+              key={key}
+              type="button"
+              aria-pressed={selected}
+              onClick={() => setActiveSection(key)}
+              className={`rounded-full border px-4 py-2 text-sm font-medium transition ${
+                selected
+                  ? "border-sage bg-sage/15 text-sage"
+                  : "border-line text-mist/65 hover:border-sage/40 hover:text-white"
+              }`}
+            >
+              {key === "all" ? "All" : key.charAt(0).toUpperCase() + key.slice(1)}
+              <span className="ml-2 text-xs opacity-70">{count}</span>
+            </button>
+          );
+        })}
+      </nav>
+
       {student.advisor_id === null && (
         <aside className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-dashed border-sage/40 bg-sage/5 p-5">
           <div>
@@ -132,9 +164,9 @@ export default function StudentDashboard() {
         </aside>
       )}
 
-      {summary.total === 0 ? <p className="rounded-xl border border-line p-6 text-mist/70">No program milestones have been configured yet.</p> : SECTIONS.map(({ key, title, description }) => {
+      {summary.total === 0 ? <p className="rounded-xl border border-line p-6 text-mist/70">No program milestones have been configured yet.</p> : visibleSections.map(({ key, title, description }) => {
         const items = milestones.filter((milestone) => milestone.category === key);
-        const visible = key === "completed" && !showAllCompleted ? items.slice(0, 1) : items;
+        const visible = key === "completed" && !showAllCompleted && activeSection === "all" ? items.slice(0, 1) : items;
         return (
           <section key={key} aria-labelledby={`${key}-title`}>
             <div className="mb-3 flex items-center gap-2">
@@ -143,7 +175,7 @@ export default function StudentDashboard() {
             </div>
             {items.length > 0 ? <div className="space-y-2">{visible.map((milestone) => <MilestoneCard key={milestone.id} milestone={milestone} />)}</div>
               : <p className="rounded-xl border border-dashed border-line px-5 py-4 text-sm text-mist/50">{key === "completed" ? "Your first approval will appear here." : `No ${title.toLowerCase()} milestones.`}</p>}
-            {key === "completed" && items.length > 1 && <button aria-expanded={showAllCompleted} onClick={() => setShowAllCompleted((value) => !value)} className="mt-3 text-sm text-sage underline underline-offset-4 hover:text-sage-light">{showAllCompleted ? "Show less" : `Show ${items.length - 1} more`}</button>}
+            {key === "completed" && activeSection === "all" && items.length > 1 && <button aria-expanded={showAllCompleted} onClick={() => setShowAllCompleted((value) => !value)} className="mt-3 text-sm text-sage underline underline-offset-4 hover:text-sage-light">{showAllCompleted ? "Show less" : `Show ${items.length - 1} more`}</button>}
             {items.length > 0 && key !== "completed" && <p className="mt-2 text-xs text-mist/45">{description} Select a milestone to see details.</p>}
           </section>
         );

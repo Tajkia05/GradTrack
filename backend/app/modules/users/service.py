@@ -14,14 +14,28 @@ def get_user_by_email(db: Session, email: str) -> User | None:
     return db.scalar(select(User).where(User.email == email.strip().lower()))
 
 
-def authenticate(db: Session, email: str, password: str) -> User | None:
-    """Check an email + password. Returns the user if correct, otherwise None."""
+# The two ways a login can fail. router.py turns each one into a message.
+NO_ACCOUNT = "no_account"          # nobody has this email
+WRONG_PASSWORD = "wrong_password"  # the email exists, but the password is wrong
+
+
+def authenticate(db: Session, email: str, password: str) -> tuple[User | None, str | None]:
+    """Check an email + password.
+
+    Returns two things: (user, problem)
+      correct            → (the user, None)
+      no such email      → (None, NO_ACCOUNT)
+      wrong password     → (None, WRONG_PASSWORD)
+
+    Note: telling people "no account found" lets anyone check which emails are
+    registered. We accept that for this prototype (registration already shows it).
+    """
     user = get_user_by_email(db, email)
-    if user is None or not verify_password(password, user.password_hash):
-        # Same result for "wrong email" and "wrong password", so attackers
-        # can't use the login form to discover which emails exist.
-        return None
-    return user
+    if user is None:
+        return None, NO_ACCOUNT
+    if not verify_password(password, user.password_hash):
+        return None, WRONG_PASSWORD
+    return user, None
 
 
 def create_user(

@@ -8,6 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
 from app.modules.users.router import router as users_router
 from app.modules.student.router import router as student_router
+from app.modules.faculty.router import router as faculty_router
 
 # Create the backend app.
 app = FastAPI(title="GradTrack API")
@@ -27,6 +28,7 @@ app.add_middleware(
 # When a NEW module is added (e.g. student), import its router above and add it here.
 app.include_router(users_router, prefix="/api")
 app.include_router(student_router, prefix="/api")
+app.include_router(faculty_router, prefix="/api")
 
 
 # A simple "is the server running?" check. Visit /api/health to test.
