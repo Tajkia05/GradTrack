@@ -120,6 +120,9 @@ export default function StudentDashboard() {
           <h2 id="progress-title" className="font-display text-lg font-semibold text-white">Program progress{student.program_year > 0 ? ` — Year ${student.program_year}` : student.program_year === 0 ? " — Not yet started" : ""}</h2>
           <p className="text-sm text-mist/70"><span className="font-semibold text-sage">{summary.completed}</span> of {summary.total} milestones</p>
         </div>
+        <p className="mt-3 text-base font-medium text-mist">
+          Progress as of <time dateTime={data.as_of} className="font-semibold text-sage">{formatDate(data.as_of)}</time>
+        </p>
         <div role="progressbar" aria-label="Approved milestones" aria-valuenow={summary.percent} aria-valuemin={0} aria-valuemax={100} aria-valuetext={`${summary.completed} of ${summary.total} milestones approved`} className="my-5 h-3 overflow-hidden rounded-full bg-ink">
           <div className="h-full rounded-full bg-sage" style={{ width: `${summary.percent}%` }} />
         </div>
@@ -192,7 +195,6 @@ export default function StudentDashboard() {
             <p className="mt-1 text-xs text-mist/50">Transfer credit requests are coming soon.</p>
           </div>}
         </div>
-        <p className="mt-4 text-xs text-mist/45">Progress as of {formatDate(data.as_of)}</p>
       </footer>
     </div>
   );
