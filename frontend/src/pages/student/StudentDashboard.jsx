@@ -93,7 +93,13 @@ export default function StudentDashboard() {
         <div>
           <p className="text-xs font-medium uppercase tracking-[0.18em] text-sage">Your degree, one step at a time</p>
           <h1 className="mt-2 font-display text-3xl font-bold text-white">My progress</h1>
-          <p className="mt-2 text-sm text-mist/65">Welcome back, {student.full_name}.</p>
+          <p className="mt-3 font-display text-xl font-medium text-mist sm:text-2xl">Welcome back, <span className="font-semibold text-white">{student.full_name}</span>.</p>
+          {student.advisor_name && (
+            <div className="mt-4 rounded-xl border border-sage/25 bg-sage/5 px-4 py-3">
+              <p className="text-xs font-medium uppercase tracking-wider text-sage">Your advisor</p>
+              <p className="mt-1 font-display text-lg font-semibold text-white sm:text-xl">{student.advisor_name}</p>
+            </div>
+          )}
         </div>
         <span className="rounded-full border border-line px-3 py-1.5 text-xs text-mist/70">
           {student.enrollment_status === "part_time" ? "Part-time" : student.enrollment_status === "full_time" ? "Full-time" : "Enrollment not set"}
@@ -154,7 +160,7 @@ export default function StudentDashboard() {
             <p className="mt-1 text-xs text-mist/50">Transfer credit requests are coming soon.</p>
           </div>}
         </div>
-        <p className="mt-4 text-xs text-mist/45">Progress as of {formatDate(data.as_of)}{student.advisor_name ? ` · Advisor: ${student.advisor_name}` : ""}</p>
+        <p className="mt-4 text-xs text-mist/45">Progress as of {formatDate(data.as_of)}</p>
       </footer>
     </div>
   );
