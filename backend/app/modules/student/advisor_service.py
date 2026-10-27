@@ -1,4 +1,4 @@
-"""Immediate advisor declaration; no faculty approval or schema migration needed."""
+"""Immediate advisor declaration and optional academic profiles."""
 
 from datetime import datetime
 from zoneinfo import ZoneInfo
@@ -9,17 +9,22 @@ from sqlalchemy.orm import Session
 
 from app.modules.milestones.models import Milestone, MilestoneStatus, StudentMilestone
 from app.modules.users.models import Role, User
+from app.modules.faculty.models import FacultyProfile
 
 
 def list_advisors(db: Session):
-    # The prototype's faculty roster is the advisor catalog. Appointment type and
-    # department eligibility are not represented in the current schema.
+    # All faculty remain visible, even when their optional profile is missing.
     counts = (select(User.advisor_id, func.count(User.id).label("advisee_count"))
               .where(User.role == Role.STUDENT, User.advisor_id.is_not(None))
               .group_by(User.advisor_id).subquery())
     rows = db.execute(select(User.id, User.full_name, User.email,
+                             FacultyProfile.department, FacultyProfile.affiliation,
+                             FacultyProfile.research_interests, FacultyProfile.lab_name,
+                             FacultyProfile.accepting_students, FacultyProfile.academic_url,
+                             FacultyProfile.bio,
                              func.coalesce(counts.c.advisee_count, 0).label("advisee_count"))
                       .outerjoin(counts, counts.c.advisor_id == User.id)
+                      .outerjoin(FacultyProfile, FacultyProfile.user_id == User.id)
                       .where(User.role == Role.FACULTY).order_by(User.full_name, User.id))
     return [dict(row) for row in rows.mappings()]
 
@@ -38,6 +43,10 @@ def declare_advisor(db: Session, student_id: int, advisor_id: int) -> User:
         advisor = db.scalar(select(User).where(User.id == advisor_id, User.role == Role.FACULTY))
         if advisor is None:
             raise HTTPException(422, "Choose an available faculty member as your advisor.")
+
+        profile = db.get(FacultyProfile, advisor_id)
+        if student.advisor_id != advisor_id and profile is not None and profile.accepting_students is False:
+            raise HTTPException(409, "This faculty member is not accepting new students. Please choose another advisor.")
 
         milestone = db.scalar(select(Milestone).where(Milestone.name == "Advisor declaration"))
         if milestone is None:

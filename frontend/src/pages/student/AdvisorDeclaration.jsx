@@ -2,6 +2,30 @@
 import { useEffect, useRef, useState } from "react";
 import { api } from "../../api/client.js";
 
+function academicLink(value) {
+  try {
+    const url = new URL(value);
+    return ["https:", "http:"].includes(url.protocol) ? url.href : null;
+  } catch { return null; }
+}
+
+function AcademicDetails({ advisor }) {
+  const link = academicLink(advisor.academic_url);
+  const fields = [["Department", advisor.department], ["Institution / affiliation", advisor.affiliation],
+    ["Research interests", advisor.research_interests], ["Laboratory / group", advisor.lab_name]];
+  return <section aria-label={`Academic profile of ${advisor.full_name}`} className="border-t border-line px-4 py-3">
+    <h3 className="text-sm font-medium text-sage">Academic profile</h3>
+    <dl className="mt-3 grid gap-3 text-sm sm:grid-cols-2">
+      {fields.map(([label, value]) => <div key={label} className="min-w-0">
+        <dt className="text-xs text-mist/60">{label}</dt>
+        <dd className="mt-1 whitespace-pre-wrap break-words text-mist">{value || "Not provided"}</dd>
+      </div>)}
+    </dl>
+    {advisor.bio && <p className="mt-4 whitespace-pre-wrap break-words text-sm leading-relaxed text-mist/80">{advisor.bio}</p>}
+    {link && <a href={link} target="_blank" rel="noopener noreferrer" className="mt-4 inline-block text-sm text-sage underline underline-offset-4">View academic website ↗<span className="sr-only"> (opens in a new tab)</span></a>}
+  </section>;
+}
+
 export default function AdvisorDeclaration({ onDeclared }) {
   const [open, setOpen] = useState(false);
   const [advisors, setAdvisors] = useState([]);
@@ -50,7 +74,7 @@ export default function AdvisorDeclaration({ onDeclared }) {
 
   function keepFocusInDialog(event) {
     if (event.key !== "Tab") return;
-    const controls = [...dialogRef.current.querySelectorAll("button:not(:disabled), input:not(:disabled)")]
+    const controls = [...dialogRef.current.querySelectorAll("button:not(:disabled), input:not(:disabled), summary, a[href]")]
       .filter((element) => element.getClientRects().length > 0);
     const first = controls[0];
     const last = controls[controls.length - 1];
@@ -84,7 +108,7 @@ export default function AdvisorDeclaration({ onDeclared }) {
   }
 
   const advisor = advisors.find((item) => String(item.id) === selected);
-  const filtered = advisors.filter((item) => `${item.full_name} ${item.email}`.toLowerCase().includes(query.trim().toLowerCase()));
+  const filtered = advisors.filter((item) => [item.full_name, item.email, item.department, item.affiliation, item.research_interests, item.lab_name].filter(Boolean).join(" ").toLowerCase().includes(query.trim().toLowerCase()));
   return (
     <>
       <aside aria-labelledby="advisor-title" className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-dashed border-sage/40 bg-sage/5 p-5">
@@ -109,7 +133,7 @@ export default function AdvisorDeclaration({ onDeclared }) {
           <div className="space-y-4 p-5 sm:p-6">
             <div>
               <label htmlFor="advisor-search" className="mb-2 block text-sm font-medium">Search faculty</label>
-              <input ref={searchRef} id="advisor-search" type="search" placeholder="Search by name or email" value={query} disabled={saving} onChange={(event) => setQuery(event.target.value)} className="w-full rounded-lg border border-line bg-ink px-4 py-3 text-white outline-none focus:border-sage focus:ring-2 focus:ring-sage/30" />
+              <input ref={searchRef} id="advisor-search" type="search" placeholder="Name, department, or research area" value={query} disabled={saving} onChange={(event) => setQuery(event.target.value)} className="w-full rounded-lg border border-line bg-ink px-4 py-3 text-white outline-none focus:border-sage focus:ring-2 focus:ring-sage/30" />
             </div>
             {error && <p role="alert" className="rounded-lg border border-red-300/25 bg-red-300/5 p-3 text-sm text-red-300">{error}</p>}
             {loading ? <p role="status" className="py-5 text-sm text-mist/70">Loading faculty members…</p> : <>
@@ -118,22 +142,28 @@ export default function AdvisorDeclaration({ onDeclared }) {
                 <legend className="sr-only">Research advisor</legend>
                 {filtered.map((item) => {
                   const checked = selected === String(item.id);
-                  return <label key={item.id} className={`flex cursor-pointer items-start gap-3 rounded-xl border p-4 transition focus-within:ring-2 focus-within:ring-sage/60 ${checked ? "border-sage bg-sage/10" : "border-line bg-ink/40 hover:border-sage/50"}`}>
-                    <input type="radio" name="advisor" value={item.id} checked={checked} onChange={() => setSelected(String(item.id))} className="mt-1 h-4 w-4 shrink-0 accent-sage" />
+                  const unavailable = item.accepting_students === false;
+                  return <div key={item.id} className={`rounded-xl border transition focus-within:ring-2 focus-within:ring-sage/60 ${checked ? "border-sage bg-sage/10" : "border-line bg-ink/40 hover:border-sage/50"}`}>
+                    <label className={`flex items-start gap-3 p-4 ${unavailable ? "cursor-not-allowed" : "cursor-pointer"}`}>
+                    <input type="radio" name="advisor" value={item.id} checked={checked} disabled={unavailable} onChange={() => setSelected(String(item.id))} className="mt-1 h-4 w-4 shrink-0 accent-sage" />
                     <span className="min-w-0 flex-1">
                       <span className="block font-display text-lg font-semibold text-white">{item.full_name}</span>
                       <span className="mt-1 block break-all text-sm text-mist/70">{item.email}</span>
+                      {(item.department || item.affiliation) && <span className="mt-2 block break-words text-sm text-mist/80">{[item.department, item.affiliation].filter(Boolean).join(" · ")}</span>}
                       <span className="mt-3 flex flex-wrap gap-2 text-xs">
                         <span className="rounded-full border border-line px-2.5 py-1 text-mist">Faculty</span>
                         <span className="rounded-full border border-sage/20 bg-sage/5 px-2.5 py-1 text-sage">{item.advisee_count} assigned student{item.advisee_count === 1 ? "" : "s"}</span>
+                        <span className={`rounded-full border px-2.5 py-1 ${unavailable ? "border-amber-200/25 text-amber-200" : item.accepting_students === true ? "border-sage/25 text-sage" : "border-line text-mist/60"}`}>{item.accepting_students === true ? "Accepting students" : unavailable ? "Not accepting students" : "Availability not provided"}</span>
                       </span>
                     </span>
                     {checked && <span aria-hidden="true" className="text-sage">✓</span>}
-                  </label>;
+                    </label>
+                    <AcademicDetails advisor={item} />
+                  </div>;
                 })}
               </fieldset>
               {filtered.length === 0 && <div className="rounded-xl border border-dashed border-line p-5 text-sm text-mist/70">
-                {advisors.length > 0 ? "No matches. Try a different name or email." : error ? "The faculty list could not be loaded." : "No faculty members are available yet. Contact your program coordinator."}
+                {advisors.length > 0 ? "No matches. Try a different name, department, or research area." : error ? "The faculty list could not be loaded." : "No faculty members are available yet. Contact your program coordinator."}
                 {advisors.length > 0 ? <button type="button" onClick={() => setQuery("")} className="mt-3 block text-sage underline">Clear search</button> : <button type="button" onClick={() => setAttempt((value) => value + 1)} className="mt-3 block text-sage underline">Refresh faculty list</button>}
               </div>}
             </>}
@@ -147,7 +177,7 @@ export default function AdvisorDeclaration({ onDeclared }) {
 
           <div className="sticky bottom-0 flex flex-wrap justify-end gap-3 border-t border-line bg-panel p-5 sm:px-6">
             <button type="button" disabled={saving} onClick={cancel} className="rounded-lg border border-line px-4 py-2 text-sm text-mist hover:border-sage disabled:opacity-50">Cancel</button>
-            <button type="submit" disabled={!advisor || saving || loading} className="rounded-lg bg-sage px-4 py-2 text-sm font-semibold text-ink hover:bg-sage-light disabled:cursor-not-allowed disabled:opacity-50">{saving ? "Declaring advisor…" : "Confirm declaration"}</button>
+            <button type="submit" disabled={!advisor || advisor.accepting_students === false || saving || loading} className="rounded-lg bg-sage px-4 py-2 text-sm font-semibold text-ink hover:bg-sage-light disabled:cursor-not-allowed disabled:opacity-50">{saving ? "Declaring advisor…" : "Confirm declaration"}</button>
           </div>
         </form>
       </dialog>

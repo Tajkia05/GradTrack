@@ -9,6 +9,7 @@ from sqlalchemy import func, select
 import test_student_dashboard as fixtures
 from app.modules.milestones.models import Milestone, MilestoneStatus, StudentMilestone
 from app.modules.student.advisor_service import declare_advisor
+from app.modules.faculty.models import FacultyProfile
 
 
 class AdvisorDeclarationTests(unittest.TestCase):
@@ -24,7 +25,43 @@ class AdvisorDeclarationTests(unittest.TestCase):
     def test_list_only_faculty_and_public_fields(self):
         response = self.client.get("/api/students/me/advisors", headers=self.headers(self.lisa))
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json(), [{"id": 1, "full_name": "Faculty", "email": "faculty@test.edu", "advisee_count": 2}])
+        self.assertEqual(response.json(), [{"id": 1, "full_name": "Faculty", "email": "faculty@test.edu", "advisee_count": 2,
+            "department": None, "affiliation": None, "research_interests": None,
+            "lab_name": None, "accepting_students": None, "academic_url": None, "bio": None}])
+
+    def test_profile_fields_are_returned_without_changing_advisee_count(self):
+        fields = dict(department="Computer Science", affiliation="Test University", research_interests="Databases; AI",
+                      lab_name="Test Lab", accepting_students=True, academic_url="https://example.org/faculty", bio="Test biography")
+        self.db.add(FacultyProfile(user_id=1, **fields))
+        self.db.commit()
+        result = self.client.get("/api/students/me/advisors", headers=self.headers(self.lisa)).json()[0]
+        for key, value in fields.items():
+            self.assertEqual(result[key], value)
+        self.assertEqual(result["advisee_count"], 2)
+        self.assertEqual(self.declare().status_code, 200)
+
+    def test_explicitly_unavailable_advisor_blocks_new_declaration(self):
+        self.db.add(FacultyProfile(user_id=1, accepting_students=False))
+        self.db.commit()
+        self.assertEqual(self.declare().status_code, 409)
+        self.assertIsNone(self.lisa.advisor_id)
+        self.assertEqual(self.declare(user=self.sam).status_code, 200)
+
+    def test_unknown_availability_remains_unknown_and_selectable(self):
+        self.db.add(FacultyProfile(user_id=1))
+        self.db.commit()
+        result = self.client.get("/api/students/me/advisors", headers=self.headers(self.lisa)).json()[0]
+        self.assertIsNone(result["accepting_students"])
+        self.assertEqual(self.declare().status_code, 200)
+
+    def test_one_profile_per_user(self):
+        from sqlalchemy.exc import IntegrityError
+        self.db.add(FacultyProfile(user_id=1))
+        self.db.commit()
+        self.db.add(FacultyProfile(user_id=1))
+        with self.assertRaises(IntegrityError):
+            self.db.commit()
+        self.db.rollback()
 
     def test_advisee_count_updates_after_declaration(self):
         self.assertEqual(self.declare().status_code, 200)

@@ -28,6 +28,13 @@ class AdvisorOut(BaseModel):
     full_name: str
     email: str
     advisee_count: int
+    department: str | None = None
+    affiliation: str | None = None
+    research_interests: str | None = None
+    lab_name: str | None = None
+    accepting_students: bool | None = None
+    academic_url: str | None = None
+    bio: str | None = None
 
     model_config = ConfigDict(from_attributes=True)
 
