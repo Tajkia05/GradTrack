@@ -1,6 +1,8 @@
 // Student progress comes from the API; prerequisites and deadlines are calculated there.
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { api } from "../../api/client.js";
+import AdvisorDeclaration from "./AdvisorDeclaration.jsx";
+import AdvisorDeclarationDetails from "./AdvisorDeclarationDetails.jsx";
 
 const STATUS_LABELS = {
   not_started: "Not started", in_progress: "In progress", submitted: "Submitted",
@@ -22,6 +24,7 @@ function formatDate(value) {
 
 function MilestoneCard({ milestone }) {
   const completed = milestone.category === "completed";
+  const isAdvisorDeclaration = completed && milestone.name.toLowerCase() === "advisor declaration";
   return (
     <details className="group rounded-xl border border-line bg-panel open:border-sage/40">
       <summary className="flex cursor-pointer list-none flex-wrap items-center gap-3 rounded-xl p-4 focus-visible:outline-2 focus-visible:outline-sage sm:p-5 [&::-webkit-details-marker]:hidden">
@@ -41,13 +44,24 @@ function MilestoneCard({ milestone }) {
           </span>
           {milestone.overdue && <span className="font-medium text-amber-200">Overdue</span>}
           <span className={`rounded-full border px-3 py-1 text-xs ${completed ? "border-sage/25 bg-sage/10 text-sage" : "border-line text-mist"}`}>
-            {STATUS_LABELS[milestone.status] || milestone.status}
+            {isAdvisorDeclaration ? "Completed" : STATUS_LABELS[milestone.status] || milestone.status}
           </span>
           <span aria-hidden="true" className="text-mist/50 transition-transform group-open:rotate-180">⌄</span>
         </div>
       </summary>
       <div className="space-y-3 border-t border-line px-5 py-4 text-sm text-mist/80">
-        <p>{completed ? "This milestone has been approved." : milestone.eligible ? "Prerequisites are met. This milestone is available to work on." : "This milestone is waiting on the requirements below."}</p>
+        {isAdvisorDeclaration ? (
+          <div className="flex flex-wrap items-end justify-between gap-4">
+            <div>
+              <p className="text-mist/60">Declaration date</p>
+              <p className="mt-1 font-display text-lg font-semibold text-white">{milestone.completed_on
+                ? <time dateTime={milestone.completed_on}>{new Intl.DateTimeFormat("en-US", { dateStyle: "long" }).format(new Date(`${milestone.completed_on}T12:00:00`))}</time>
+                : "Date not recorded"}</p>
+              <p className="mt-2">Declaration completed. No faculty approval was required.</p>
+            </div>
+            <AdvisorDeclarationDetails />
+          </div>
+        ) : <p>{completed ? "This milestone has been approved." : milestone.eligible ? "Prerequisites are met. This milestone is available to work on." : "This milestone is waiting on the requirements below."}</p>}
         {milestone.requirements.length > 0 && <ul className="space-y-2">
           {milestone.requirements.map((requirement) => (
             <li key={requirement.name} className="flex gap-2">
@@ -68,6 +82,12 @@ export default function StudentDashboard() {
   const [attempt, setAttempt] = useState(0);
   const [showAllCompleted, setShowAllCompleted] = useState(false);
   const [activeSection, setActiveSection] = useState("all");
+  const [declarationMessage, setDeclarationMessage] = useState("");
+  const declarationNotice = useRef(null);
+
+  useEffect(() => {
+    if (declarationMessage) declarationNotice.current?.focus();
+  }, [declarationMessage]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -156,16 +176,12 @@ export default function StudentDashboard() {
         })}
       </nav>
 
-      {student.advisor_id === null && (
-        <aside className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-dashed border-sage/40 bg-sage/5 p-5">
-          <div>
-            <h2 className="font-display font-semibold text-white">Declare your advisor</h2>
-            <p className="mt-1 text-sm text-mist/70">An advisor is required before your comprehensive exam.</p>
-            <p id="advisor-help" className="mt-2 text-xs text-mist/50">Advisor selection will be available in a future update.</p>
-          </div>
-          <button disabled aria-describedby="advisor-help" className="cursor-not-allowed rounded-lg border border-line px-4 py-2 text-sm text-mist/45">Choose advisor</button>
-        </aside>
-      )}
+      {declarationMessage && <p ref={declarationNotice} tabIndex={-1} role="status" className="rounded-xl border border-sage/30 bg-sage/10 p-4 text-sage focus:outline-none">{declarationMessage}</p>}
+      {student.advisor_id === null && <AdvisorDeclaration onDeclared={(dashboard) => {
+        setData(dashboard);
+        setActiveSection("all");
+        setDeclarationMessage(`${dashboard.student.advisor_name} is now your research advisor. Your progress has been updated.`);
+      }} />}
 
       {summary.total === 0 ? <p className="rounded-xl border border-line p-6 text-mist/70">No program milestones have been configured yet.</p> : visibleSections.map(({ key, title, description }) => {
         const items = milestones.filter((milestone) => milestone.category === key);

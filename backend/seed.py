@@ -19,6 +19,7 @@ from decimal import Decimal
 from sqlalchemy import inspect, select
 
 from app.core.database import Base, SessionLocal, engine
+from app.modules.faculty.models import FacultyProfile  # Register table for fresh development databases.
 from app.modules.milestones.models import (
     Milestone,
     MilestonePrerequisite,

@@ -1,10 +1,10 @@
-"""Read-only student dashboard responses. Never expose authentication fields."""
+"""Student dashboard responses and advisor input. Never expose authentication fields."""
 
 from datetime import date
 from decimal import Decimal
 from typing import Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict, Field
 
 from app.modules.milestones.models import MilestoneStatus
 from app.modules.users.models import EnrollmentStatus, Term
@@ -21,6 +21,33 @@ class StudentProfile(BaseModel):
     advisor_name: str | None
     current_semester: int | None
     program_year: int | None
+
+
+class AdvisorOut(BaseModel):
+    id: int
+    full_name: str
+    email: str
+    advisee_count: int
+    department: str | None = None
+    affiliation: str | None = None
+    research_interests: str | None = None
+    lab_name: str | None = None
+    accepting_students: bool | None = None
+    academic_url: str | None = None
+    bio: str | None = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class AdvisorDeclaration(BaseModel):
+    advisor_id: int = Field(gt=0, strict=True)
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class AdvisorDeclarationDetails(BaseModel):
+    declared_on: date | None
+    advisor: AdvisorOut
 
 
 class RequirementOut(BaseModel):
