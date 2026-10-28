@@ -39,7 +39,7 @@ export default function AdvisorDeclarationDetails() {
   }
 
   return <>
-    <button type="button" aria-haspopup="dialog" aria-label="Details of advisor declaration" onClick={() => setOpen(true)} className="rounded-lg border border-sage/40 bg-sage/10 px-4 py-2 text-sm font-medium text-sage hover:bg-sage/20">Details</button>
+    <button type="button" aria-haspopup="dialog" aria-label="Details of advisor declaration" onClick={() => setOpen(true)} className="cursor-pointer rounded-lg border border-sage/40 bg-sage/10 px-4 py-2 text-sm font-medium text-sage hover:bg-sage/20">Details</button>
     <dialog ref={dialogRef} aria-labelledby="declaration-details-title" onKeyDown={handleKeyDown} onCancel={(event) => { event.preventDefault(); setOpen(false); }} className="m-auto max-h-[90dvh] w-[calc(100%-2rem)] max-w-2xl overflow-y-auto rounded-2xl border border-sage/30 bg-panel p-0 text-mist shadow-2xl backdrop:bg-black/75 backdrop:backdrop-blur-sm">
       <header className="flex items-start justify-between gap-4 border-b border-line p-5 sm:p-6">
         <div>
