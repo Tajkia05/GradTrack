@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState } from "react";
 import { api } from "../../api/client.js";
 import AdvisorDeclaration from "./AdvisorDeclaration.jsx";
+import AdvisorDeclarationDetails from "./AdvisorDeclarationDetails.jsx";
 
 const STATUS_LABELS = {
   not_started: "Not started", in_progress: "In progress", submitted: "Submitted",
@@ -23,6 +24,7 @@ function formatDate(value) {
 
 function MilestoneCard({ milestone }) {
   const completed = milestone.category === "completed";
+  const isAdvisorDeclaration = completed && milestone.name.toLowerCase() === "advisor declaration";
   return (
     <details className="group rounded-xl border border-line bg-panel open:border-sage/40">
       <summary className="flex cursor-pointer list-none flex-wrap items-center gap-3 rounded-xl p-4 focus-visible:outline-2 focus-visible:outline-sage sm:p-5 [&::-webkit-details-marker]:hidden">
@@ -42,13 +44,24 @@ function MilestoneCard({ milestone }) {
           </span>
           {milestone.overdue && <span className="font-medium text-amber-200">Overdue</span>}
           <span className={`rounded-full border px-3 py-1 text-xs ${completed ? "border-sage/25 bg-sage/10 text-sage" : "border-line text-mist"}`}>
-            {STATUS_LABELS[milestone.status] || milestone.status}
+            {isAdvisorDeclaration ? "Completed" : STATUS_LABELS[milestone.status] || milestone.status}
           </span>
           <span aria-hidden="true" className="text-mist/50 transition-transform group-open:rotate-180">⌄</span>
         </div>
       </summary>
       <div className="space-y-3 border-t border-line px-5 py-4 text-sm text-mist/80">
-        <p>{completed ? "This milestone has been approved." : milestone.eligible ? "Prerequisites are met. This milestone is available to work on." : "This milestone is waiting on the requirements below."}</p>
+        {isAdvisorDeclaration ? (
+          <div className="flex flex-wrap items-end justify-between gap-4">
+            <div>
+              <p className="text-mist/60">Declaration date</p>
+              <p className="mt-1 font-display text-lg font-semibold text-white">{milestone.completed_on
+                ? <time dateTime={milestone.completed_on}>{new Intl.DateTimeFormat("en-US", { dateStyle: "long" }).format(new Date(`${milestone.completed_on}T12:00:00`))}</time>
+                : "Date not recorded"}</p>
+              <p className="mt-2">Declaration completed. No faculty approval was required.</p>
+            </div>
+            <AdvisorDeclarationDetails />
+          </div>
+        ) : <p>{completed ? "This milestone has been approved." : milestone.eligible ? "Prerequisites are met. This milestone is available to work on." : "This milestone is waiting on the requirements below."}</p>}
         {milestone.requirements.length > 0 && <ul className="space-y-2">
           {milestone.requirements.map((requirement) => (
             <li key={requirement.name} className="flex gap-2">

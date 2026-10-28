@@ -45,6 +45,11 @@ class AdvisorDeclaration(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
+class AdvisorDeclarationDetails(BaseModel):
+    declared_on: date | None
+    advisor: AdvisorOut
+
+
 class RequirementOut(BaseModel):
     name: str
     met: bool

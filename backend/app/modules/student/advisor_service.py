@@ -12,7 +12,7 @@ from app.modules.users.models import Role, User
 from app.modules.faculty.models import FacultyProfile
 
 
-def list_advisors(db: Session):
+def list_advisors(db: Session, advisor_id: int | None = None):
     # All faculty remain visible, even when their optional profile is missing.
     counts = (select(User.advisor_id, func.count(User.id).label("advisee_count"))
               .where(User.role == Role.STUDENT, User.advisor_id.is_not(None))
@@ -25,8 +25,22 @@ def list_advisors(db: Session):
                              func.coalesce(counts.c.advisee_count, 0).label("advisee_count"))
                       .outerjoin(counts, counts.c.advisor_id == User.id)
                       .outerjoin(FacultyProfile, FacultyProfile.user_id == User.id)
+                      .where(User.id == advisor_id if advisor_id is not None else True)
                       .where(User.role == Role.FACULTY).order_by(User.full_name, User.id))
     return [dict(row) for row in rows.mappings()]
+
+
+def get_declaration_details(db: Session, student: User):
+    progress = db.scalar(select(StudentMilestone).join(Milestone)
+                         .where(StudentMilestone.student_id == student.id,
+                                Milestone.name == "Advisor declaration",
+                                StudentMilestone.status == MilestoneStatus.APPROVED))
+    if progress is None or student.advisor_id is None:
+        raise HTTPException(404, "No completed advisor declaration was found. Refresh your dashboard.")
+    advisors = list_advisors(db, student.advisor_id)
+    if not advisors:
+        raise HTTPException(404, "Your advisor's profile is unavailable. Contact your program coordinator.")
+    return {"declared_on": progress.completed_on, "advisor": advisors[0]}
 
 
 def declare_advisor(db: Session, student_id: int, advisor_id: int) -> User:

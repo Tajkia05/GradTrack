@@ -68,6 +68,33 @@ class AdvisorDeclarationTests(unittest.TestCase):
         response = self.client.get("/api/students/me/advisors", headers=self.headers(self.lisa))
         self.assertEqual(response.json()[0]["advisee_count"], 3)
 
+    def test_completed_declaration_details_use_own_student_and_original_date(self):
+        response = self.client.get("/api/students/me/advisor?student_id=7", headers=self.headers(self.sam))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["declared_on"], "2024-01-15")
+        self.assertEqual(response.json()["advisor"]["id"], 1)
+        self.assertNotIn("password_hash", response.text)
+
+    def test_declaration_details_require_student_and_completed_declaration(self):
+        path = "/api/students/me/advisor"
+        self.assertEqual(self.client.get(path).status_code, 401)
+        for user in [self.faculty, self.director]:
+            self.assertEqual(self.client.get(path, headers=self.headers(user)).status_code, 403)
+        self.assertEqual(self.client.get(path, headers=self.headers(self.lisa)).status_code, 404)
+        self.assertEqual(self.declare().status_code, 200)
+        self.assertEqual(self.client.get(path, headers=self.headers(self.lisa)).status_code, 200)
+
+    def test_details_show_current_profile_and_preserve_unknown_date(self):
+        self.db.add(FacultyProfile(user_id=1, department="Computer Science", accepting_students=False))
+        row = self.db.scalar(select(StudentMilestone).where(StudentMilestone.student_id == 5, StudentMilestone.milestone_id == 2))
+        row.completed_on = None
+        self.db.commit()
+        response = self.client.get("/api/students/me/advisor", headers=self.headers(self.sam))
+        self.assertEqual(response.status_code, 200)
+        self.assertIsNone(response.json()["declared_on"])
+        self.assertEqual(response.json()["advisor"]["department"], "Computer Science")
+        self.assertFalse(response.json()["advisor"]["accepting_students"])
+
     def test_faculty_without_students_has_zero_count(self):
         from app.modules.users.models import Role, User
         self.db.add(User(id=9, email="new@test.edu", full_name="New Faculty", role=Role.FACULTY, password_hash="unused"))

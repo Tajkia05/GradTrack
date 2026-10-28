@@ -9,7 +9,7 @@ function academicLink(value) {
   } catch { return null; }
 }
 
-function AcademicDetails({ advisor }) {
+export function AcademicDetails({ advisor }) {
   const link = academicLink(advisor.academic_url);
   const fields = [["Department", advisor.department], ["Institution / affiliation", advisor.affiliation],
     ["Research interests", advisor.research_interests], ["Laboratory / group", advisor.lab_name]];
