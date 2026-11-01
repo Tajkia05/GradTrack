@@ -9,6 +9,8 @@ from app.core.config import settings
 from app.modules.users.router import router as users_router
 from app.modules.student.router import router as student_router
 from app.modules.faculty.router import router as faculty_router
+# The student coursework endpoints.
+from app.modules.coursework.router import router as coursework_router
 
 # Create the backend app.
 app = FastAPI(title="GradTrack API")
@@ -29,6 +31,8 @@ app.add_middleware(
 app.include_router(users_router, prefix="/api")
 app.include_router(student_router, prefix="/api")
 app.include_router(faculty_router, prefix="/api")
+# Plug in the coursework endpoints, which also start with /api.
+app.include_router(coursework_router, prefix="/api")
 
 
 # A simple "is the server running?" check. Visit /api/health to test.

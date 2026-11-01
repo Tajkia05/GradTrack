@@ -57,3 +57,41 @@ counts still come from `users.advisor_id`; no student identities are exposed her
 A faculty member marked FALSE cannot receive a new declaration. Unknown availability
 remains selectable and is explicitly labeled in the modal. Existing assignments and
 retries of the same declaration are preserved when availability changes.
+
+# Coursework
+
+## Migration
+
+Apply `002_create_coursework.sql` in the Neon SQL editor against the database
+configured in `backend/.env`, before running the backend with the coursework
+endpoints. The script is transactional and repeatable. It creates the `courses` and
+`student_courses` tables and adds the course list, without changing existing data.
+
+Then apply `003_add_manual_courses.sql` the same way. It lets students enter UAlbany
+courses that aren't on the course list, and it keeps all existing rows.
+
+Then apply `004_remove_research_methods_milestone.sql`. It permanently deletes the
+"Research methods course" milestone, its candidacy rule and its progress rows. CSI 790
+remains a core course in Coursework, so candidacy still requires it through the
+Coursework milestone, and its deadline is shown in the Coursework popup. If `seed.py`
+from an older branch adds the milestone back, run this script again.
+
+## Manually entered courses
+
+Students can enter a UAlbany course that isn't on the list, with its code, name,
+department (CS or non-CS) and whether it's independent study or research. These courses
+count toward electives once they have a qualifying grade. The bulletin requires
+approval for non-CS courses, but GradTrack doesn't record that approval. Courses from
+other universities aren't entered here, because they need the transfer credit review.
+
+## Optional sample courses
+
+After the migration, run `python seed.py` from the `backend` folder to add sample
+courses for the Sam, Lisa and Raj test accounts. Rows that already exist are skipped.
+Do not run `seed.py --reset`, because it deletes all data in the shared database.
+
+## Course list
+
+The course list comes from the Graduate Bulletin's Computer Science Courses page, and
+the core and breadth areas come from the CS PhD and MS pages. Load-only courses that
+earn no credit are not included. To change the list, edit the rows in Neon.
