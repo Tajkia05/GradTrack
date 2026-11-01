@@ -95,3 +95,51 @@ Do not run `seed.py --reset`, because it deletes all data in the shared database
 The course list comes from the Graduate Bulletin's Computer Science Courses page, and
 the core and breadth areas come from the CS PhD and MS pages. Load-only courses that
 earn no credit are not included. To change the list, edit the rows in Neon.
+
+# Committee formation
+
+## Migration
+
+Apply `005_create_committee_and_notifications.sql` in the Neon SQL editor. It adds the
+`committee_members` and `notifications` tables, without changing existing data.
+
+## How it works
+
+A student's declared advisor is automatically the approved committee chair, and has no
+row in `committee_members`. The student invites faculty members, who each get a row with
+`status` set to `pending`. External members have no account, so they're `approved` as
+soon as the student adds them. The student can remove anyone except the chair, and a
+removed faculty member gets a notification. Committee formation becomes Approved once at
+least 4 members have approved, with at least 3 from the CS department.
+A member counts as CS when `faculty_profiles.department` is Computer Science. External
+members and blank departments don't count as CS.
+
+The milestone updates the next time the student opens their dashboard or committee
+popup. If removing someone leaves the committee below the requirement, Committee
+formation goes back to In progress straight away, and milestones that need it are
+blocked again. Milestones that were already approved stay approved.
+
+## Approving by hand
+
+Until the faculty side is built, faculty approvals can be set in the database, on test
+students only because the database is shared. Find the row, then update it:
+
+```sql
+SELECT c.id, u.email AS student, c.faculty_id, c.external_name, c.status
+FROM committee_members c JOIN users u ON u.id = c.student_id
+ORDER BY c.id;
+
+UPDATE committee_members SET status = 'approved' WHERE id = 1;
+```
+
+Valid values are `pending`, `approved` and `declined`.
+
+## Faculty side (still to build)
+
+1. Show each faculty member their pending invitations: rows in `committee_members` where
+   `faculty_id` is their user id and `status` is `pending`.
+2. Let them approve or decline, by setting that row's `status` to `approved` or
+   `declined`. Only the invited faculty member may change their own row. Nothing else
+   is needed, because Committee formation is worked out from these rows.
+3. Show their notifications from `GET /api/notifications/me`. Marking one as read isn't
+   built yet.

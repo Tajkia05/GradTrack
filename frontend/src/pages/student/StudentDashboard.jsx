@@ -5,6 +5,8 @@ import AdvisorDeclaration from "./AdvisorDeclaration.jsx";
 import AdvisorDeclarationDetails from "./AdvisorDeclarationDetails.jsx";
 // The credit summary, button and popup on the Coursework card.
 import Coursework from "./Coursework.jsx";
+// The summary, button and popup on the Committee formation card.
+import Committee from "./Committee.jsx";
 
 const STATUS_LABELS = {
   not_started: "Not started", in_progress: "In progress", submitted: "Submitted",
@@ -24,8 +26,8 @@ function formatDate(value) {
     .format(new Date(`${value}T12:00:00`));
 }
 
-// onCourseworkChanged reloads the dashboard after a student changes their courses.
-function MilestoneCard({ milestone, onCourseworkChanged }) {
+// onProgressChanged reloads the dashboard after a student changes their courses or committee.
+function MilestoneCard({ milestone, onProgressChanged }) {
   const completed = milestone.category === "completed";
   const isAdvisorDeclaration = completed && milestone.name.toLowerCase() === "advisor declaration";
   return (
@@ -66,7 +68,9 @@ function MilestoneCard({ milestone, onCourseworkChanged }) {
           </div>
         ) : <p>{completed ? "This milestone has been approved." : milestone.eligible ? "Prerequisites are met. This milestone is available to work on." : "This milestone is waiting on the requirements below."}</p>}
         {/* Only the Coursework card gets the credit summary and button. */}
-        {milestone.name.toLowerCase() === "coursework" && <Coursework onChanged={onCourseworkChanged} />}
+        {milestone.name.toLowerCase() === "coursework" && <Coursework onChanged={onProgressChanged} />}
+        {/* Only the Committee formation card gets the committee summary and button. */}
+        {milestone.name.toLowerCase() === "committee formation" && <Committee onChanged={onProgressChanged} />}
         {milestone.requirements.length > 0 && <ul className="space-y-2">
           {milestone.requirements.map((requirement) => (
             <li key={requirement.name} className="flex gap-2">
@@ -207,7 +211,7 @@ export default function StudentDashboard() {
               <h2 id={`${key}-title`} className="text-xs font-semibold uppercase tracking-[0.16em] text-mist/70">{title}</h2>
               <span className="rounded-full bg-panel px-2 py-0.5 text-xs text-mist/60">{items.length}</span>
             </div>
-            {items.length > 0 ? <div className="space-y-2">{visible.map((milestone) => <MilestoneCard key={milestone.id} milestone={milestone} onCourseworkChanged={refreshDashboard} />)}</div>
+            {items.length > 0 ? <div className="space-y-2">{visible.map((milestone) => <MilestoneCard key={milestone.id} milestone={milestone} onProgressChanged={refreshDashboard} />)}</div>
               : <p className="rounded-xl border border-dashed border-line px-5 py-4 text-sm text-mist/50">{key === "completed" ? "Your first approval will appear here." : `No ${title.toLowerCase()} milestones.`}</p>}
             {key === "completed" && activeSection === "all" && items.length > 1 && <button aria-expanded={showAllCompleted} onClick={() => setShowAllCompleted((value) => !value)} className="mt-3 text-sm text-sage underline underline-offset-4 hover:text-sage-light">{showAllCompleted ? "Show less" : `Show ${items.length - 1} more`}</button>}
             {items.length > 0 && key !== "completed" && <p className="mt-2 text-xs text-mist/45">{description} Select a milestone to see details.</p>}

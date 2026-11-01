@@ -5,6 +5,8 @@
 import { useEffect, useRef, useState } from "react";
 // api is the one function that talks to the backend.
 import { api } from "../../api/client.js";
+// The app's own "are you sure?" box.
+import ConfirmDialog from "../../components/ConfirmDialog.jsx";
 
 // The grades a student can select, matching the backend's list.
 const GRADES = ["A", "A-", "B+", "B", "B-", "C+", "C", "C-", "D+", "D", "E", "S", "U"];
@@ -225,6 +227,8 @@ function CourseworkContent({ data, onUpdate }) {
   const [form, setForm] = useState(emptyForm());
   // The id of the row being edited. Empty when adding a new course.
   const [editingId, setEditingId] = useState(null);
+  // The course waiting to be confirmed for removal. Empty when the box isn't showing.
+  const [rowToRemove, setRowToRemove] = useState(null);
   // An error message to show. Empty when there's no error.
   const [error, setError] = useState("");
   // True while a request is being saved, to prevent double clicks.
@@ -331,10 +335,12 @@ function CourseworkContent({ data, onUpdate }) {
     if (saved) resetForm();
   }
 
-  // Runs when the student clicks Remove on a course.
-  async function handleDelete(row) {
-    // Ask first, and stop if they cancel.
-    if (!window.confirm(`Remove ${row.code}?`)) return;
+  // Runs when the student confirms the removal in the box.
+  async function confirmRemove() {
+    // Remember which course is being removed.
+    const row = rowToRemove;
+    // Close the box.
+    setRowToRemove(null);
     // Delete the row.
     const removed = await send(`/students/me/courses/${row.id}`, { method: "DELETE" });
     // If the removed row was being edited, clear the form too.
@@ -526,11 +532,13 @@ function CourseworkContent({ data, onUpdate }) {
               {/* Loads this course into the form above. */}
               <button type="button" onClick={() => startEditing(row)} className="text-sage underline underline-offset-4 hover:text-sage-light">Edit</button>
               {/* Removes this course. */}
-              <button type="button" disabled={saving} onClick={() => handleDelete(row)} className="text-mist/70 underline underline-offset-4 hover:text-white disabled:opacity-50">Remove</button>
+              <button type="button" disabled={saving} onClick={() => setRowToRemove(row)} className="text-mist/70 underline underline-offset-4 hover:text-white disabled:opacity-50">Remove</button>
             </li>
           ))}
         </ul>
       </section>
+      {/* The "are you sure?" box, while a removal is waiting to be confirmed. Completed coursework also gets a warning. */}
+      {rowToRemove && <ConfirmDialog title={`Remove ${rowToRemove.code}?`} message={data.percent === 100 ? "If you no longer meet the coursework requirements, your Coursework milestone goes back to In progress." : undefined} confirmLabel="Remove" onConfirm={confirmRemove} onCancel={() => setRowToRemove(null)} />}
     </div>
   );
 }
