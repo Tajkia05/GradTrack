@@ -4,10 +4,11 @@
 
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext.jsx";
-import { roleLabel } from "../auth/roles.js";
 import logoMark from "../assets/gradtrack-mark.png";
 // The bell with the user's notifications.
 import NotificationBell from "./NotificationBell.jsx";
+// The picture and name, with the dropdown for Profile and Log out.
+import UserMenu from "./UserMenu.jsx";
 
 // The navbar links for each role. Each user only sees their own role's links.
 // When a teammate adds a page, they add its link here under the right role.
@@ -42,6 +43,8 @@ export default function Layout() {
             <NavLink
               key={l.to}
               to={l.to}
+              // Match the exact URL, so "My progress" isn't also highlighted on the profile page.
+              end
               // Highlight the link of the page we are currently on.
               className={({ isActive }) =>
                 "text-sm transition-colors " + (isActive ? "font-medium text-sage" : "text-mist/70 hover:text-white")
@@ -51,19 +54,12 @@ export default function Layout() {
             </NavLink>
           ))}
 
-          {/* Right side: who is logged in + log out button. "ml-auto" pushes it to the right. */}
+          {/* Right side: notifications and the user menu. "ml-auto" pushes it to the right. */}
           <div className="ml-auto flex items-center gap-3 text-sm">
             {/* The notifications bell. */}
             <NotificationBell />
-            <span className="text-mist">
-              {user.full_name} <span className="text-mist/50">({roleLabel(user.role)})</span>
-            </span>
-            <button
-              onClick={handleLogout}
-              className="rounded-lg border border-line px-3 py-1 text-mist transition-colors hover:border-sage hover:text-white"
-            >
-              Log out
-            </button>
+            {/* The picture and name, which open the dropdown with Profile and Log out. */}
+            <UserMenu user={user} links={LINKS_BY_ROLE[user.role]} onLogout={handleLogout} />
           </div>
         </div>
       </nav>

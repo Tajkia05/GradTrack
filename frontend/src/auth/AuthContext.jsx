@@ -7,6 +7,7 @@
 //   login()    → log in with email + password + role (+ "Remember me")
 //   register() → create a new account (and log in)
 //   logout()   → log out
+//   setUser()  → update the remembered user, e.g. after a student changes their name
 //
 // Any page can use it like this:
 //   const { user, logout } = useAuth();
@@ -77,7 +78,7 @@ export function AuthProvider({ children }) {
   }
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, register, logout }}>
+    <AuthContext.Provider value={{ user, loading, login, register, logout, setUser }}>
       {children}
     </AuthContext.Provider>
   );

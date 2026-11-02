@@ -61,6 +61,8 @@ class MilestoneOut(BaseModel):
     name: str
     status: MilestoneStatus
     category: Literal["current", "blocked", "upcoming", "completed"]
+    # True if the app completes this milestone by itself, so the page says "Completed" instead of "Approved".
+    is_automatic: bool
     completed_on: date | None
     # The exact approval date and time. Empty if it isn't approved, or the time wasn't recorded.
     approved_at: datetime | None = None

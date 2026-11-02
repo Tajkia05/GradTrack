@@ -28,6 +28,22 @@ class MilestoneStatus(str, enum.Enum):
     REJECTED = "rejected"
 
 
+# Milestones the app completes by itself, with no one reviewing them. Their database status is still "approved".
+AUTOMATIC_MILESTONES = {"coursework", "advisor declaration", "committee formation"}
+
+
+# True if the app completes this milestone by itself.
+def is_automatic(milestone_name: str) -> bool:
+    # Compare in lowercase, the same as the dashboard's other milestone checks.
+    return milestone_name.casefold() in AUTOMATIC_MILESTONES
+
+
+# The word shown to students: "completed" for automatic milestones, and "approved" when a person decides.
+def finished_word(milestone_name: str) -> str:
+    # Choose the word from how the milestone finishes.
+    return "completed" if is_automatic(milestone_name) else "approved"
+
+
 class Milestone(Base):
     """A degree requirement, e.g. 'Comprehensive exam'."""
     __tablename__ = "milestones"

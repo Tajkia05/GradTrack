@@ -127,7 +127,7 @@ class DashboardTests(unittest.TestCase):
     def test_proposal_requires_both_comps_and_committee(self):
         self.progress(6, 4, MilestoneStatus.APPROVED, "2026-01-10")
         self.db.flush()
-        self.assertEqual(self.milestone(self.lisa, 6).blocked_reasons, ["Committee formation must be approved."])
+        self.assertEqual(self.milestone(self.lisa, 6).blocked_reasons, ["Committee formation must be completed."])
 
     def test_new_student_has_all_milestones_without_inserting_rows(self):
         new = self.student(8, "New", False, EnrollmentStatus.FULL_TIME, Term.FALL, 2026, "3.5", None)

@@ -112,7 +112,7 @@ class AdvisorDeclarationTests(unittest.TestCase):
         self.assertEqual(milestone["status"], "approved")
         self.assertEqual(milestone["completed_on"], body["as_of"])
         comps = next(m for m in body["milestones"] if m["id"] == 4)
-        self.assertEqual(comps["blocked_reasons"], ["Committee formation must be approved."])
+        self.assertEqual(comps["blocked_reasons"], ["Committee formation must be completed."])
         persisted = self.client.get("/api/students/me/milestones", headers=self.headers(self.lisa)).json()
         self.assertEqual(persisted["student"]["advisor_id"], 1)
         faculty = self.client.get("/api/faculty/me/dashboard", headers=self.headers(self.faculty)).json()

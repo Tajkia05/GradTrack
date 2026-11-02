@@ -277,7 +277,7 @@ class CourseworkTests(unittest.TestCase):
         # The approval date is recorded.
         self.assertIsNotNone(milestone.completed_on)
         # The student is told, with the date and time.
-        self.assertIn("Coursework was approved on", self.db.scalars(select(Notification).where(Notification.user_id == self.lisa.id)).all()[-1].message)
+        self.assertIn("Coursework was completed on",self.db.scalars(select(Notification).where(Notification.user_id == self.lisa.id)).all()[-1].message)
 
     # 45 credits aren't enough if the core and breadth average is below B+.
     def test_low_average_does_not_approve_the_milestone(self):
@@ -551,6 +551,85 @@ class CourseworkTests(unittest.TestCase):
         row_id = self.add(1, grade=None, year=2026, term="fall").json()["my_courses"][0]["id"]
         # She removes it, and it works.
         self.assertEqual(self.client.delete(f"/api/students/me/courses/{row_id}", headers=self.headers(self.lisa)).status_code, 200)
+
+    # Returns the note on a course in the response, found by its course id.
+    def note(self, data, course_id, year=2025):
+        # Find the row for this course and year, then return its note.
+        return next(row["note"] for row in data["my_courses"] if row["course_id"] == course_id and row["year"] == year)
+
+    # A course that counts as normal has no note.
+    def test_normal_course_has_no_note(self):
+        # Lisa earns a B in a core course, which meets the requirement.
+        self.assertIsNone(self.note(self.add(1, grade="B").json(), 1))
+
+    # A course in progress has no note.
+    def test_course_in_progress_has_no_note(self):
+        # Lisa has no grade yet.
+        self.assertIsNone(self.note(self.add(1, grade=None).json(), 1))
+
+    # A low grade in a core course explains the rule.
+    def test_low_core_grade_is_explained(self):
+        # Lisa earns a B-.
+        note = self.note(self.add(1, grade="B-").json(), 1)
+        # It names the group and the required grade.
+        self.assertIn("Doesn't count toward Core, which needs a B or better", note)
+        # It says where the credits went.
+        self.assertIn("Counted as an elective", note)
+
+    # A low grade in a breadth course explains the rule.
+    def test_low_breadth_grade_is_explained(self):
+        # Lisa earns a C+ in an AI & ML course.
+        data = self.add(4, grade="C+").json()
+        # The note names the area.
+        self.assertIn("Doesn't count toward Breadth: AI & ML, which needs a B or better", self.note(data, 4))
+        # The credits match the note: the area is empty, and the elective has 3.
+        self.assertEqual((self.bar(data, "Breadth: AI")["earned_credits"], self.bar(data, "Electives")["earned_credits"]), (0, 3))
+
+    # A grade that earns no credit explains why.
+    def test_no_credit_grade_is_explained(self):
+        # Each of these earns no graduate credit.
+        for offset, grade in enumerate(("C-", "D+", "D", "E", "U")):
+            # Add one in a separate year, so they aren't duplicates.
+            data = self.add(10, grade=grade, year=2020 + offset).json()
+            # The note says so.
+            self.assertIn("Earns no graduate credit", self.note(data, 10, 2020 + offset))
+
+    # A repeated course explains which attempt doesn't count.
+    def test_lower_repeat_is_explained(self):
+        # Lisa earns a B- first.
+        self.add(1, grade="B-", year=2024)
+        # She repeats it and earns an A.
+        data = self.add(1, grade="A", year=2025).json()
+        # The lower attempt explains why it doesn't count.
+        self.assertIn("another attempt at CSI 503 has a higher grade", self.note(data, 1, 2024))
+        # The higher attempt has no note.
+        self.assertIsNone(self.note(data, 1, 2025))
+
+    # A second course in a filled breadth area explains where it went.
+    def test_filled_breadth_area_is_explained(self):
+        # The first AI & ML course fills the area.
+        self.add(4, year=2024)
+        # The second one is added later.
+        data = self.add(5).json()
+        # The first has no note.
+        self.assertIsNone(self.note(data, 4, 2024))
+        # The second explains that it became an elective.
+        self.assertIn("already filled", self.note(data, 5))
+
+    # CSI 518's split is explained.
+    def test_csi_518_split_is_explained(self):
+        # Lisa takes CSI 518 for 4 credits.
+        self.assertIn("3 credits count toward Breadth: Systems or CSI 518, and the other 1 toward electives", self.note(self.add(7, credits=4).json(), 7))
+
+    # Going past the research limit is explained.
+    def test_research_limit_is_explained(self):
+        # Lisa takes 19 credits of independent study.
+        self.assertIn("Only 15 credits", self.note(self.add(9, credits=19, grade="S").json(), 9))
+
+    # CSI 898 has its own group, so the research limit note doesn't apply.
+    def test_csi_898_has_no_research_note(self):
+        # Lisa takes 12 credits of CSI 898.
+        self.assertIsNone(self.note(self.add(8, credits=12, grade="S").json(), 8))
 
     # Reads the coursework page data for a student.
     def page(self, user):

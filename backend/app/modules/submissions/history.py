@@ -9,8 +9,8 @@ from zoneinfo import ZoneInfo
 # Session is one conversation with the database.
 from sqlalchemy.orm import Session
 
-# The milestone table, for its name, and the list of statuses.
-from app.modules.milestones.models import Milestone, MilestoneStatus
+# The milestone table, for its name, the list of statuses, and the "completed" or "approved" wording.
+from app.modules.milestones.models import Milestone, MilestoneStatus, finished_word
 # The notifications table.
 from app.modules.notifications.models import Notification
 # The history table.
@@ -19,8 +19,8 @@ from app.modules.submissions.models import MilestoneStatusHistory
 # The message the student gets for each status. {name} is the milestone, and {when} is the date and time.
 MESSAGES = {
     # A student's own submission has no message, because they already know. Their advisor is told instead.
-    # Shown after an approval, including automatic ones.
-    MilestoneStatus.APPROVED: "{name} was approved on {when}.",
+    # Shown when a milestone finishes. {word} is "completed" if automatic, or "approved" if a person decided.
+    MilestoneStatus.APPROVED: "{name} was {word} on {when}.",
     # Shown after an advisor asks for changes.
     MilestoneStatus.REVISION_REQUESTED: "Your advisor requested a revision on {name} on {when}.",
     # Shown after an advisor rejects it.
@@ -47,7 +47,7 @@ def record_status_change(db: Session, student_id: int, milestone_id: int, status
     # Write it out, e.g. "November 2, 2026 at 3:30 PM ET".
     when = f"{now:%B} {now.day}, {now.year} at {now.strftime('%I:%M %p').lstrip('0')} ET"
     # Fill in the message.
-    message = template.format(name=milestone.name, when=when)
+    message = template.format(name=milestone.name, when=when, word=finished_word(milestone.name))
     # Add the reviewer's comment, if there is one.
     if comment:
         # Put the comment after the message.

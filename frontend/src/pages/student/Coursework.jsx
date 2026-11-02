@@ -227,6 +227,8 @@ function CourseworkContent({ data, onUpdate }) {
   const [form, setForm] = useState(emptyForm());
   // The id of the row being edited. Empty when adding a new course.
   const [editingId, setEditingId] = useState(null);
+  // Points to the form, so clicking Edit can scroll to it.
+  const formRef = useRef(null);
   // The course waiting to be confirmed for removal. Empty when the box isn't showing.
   const [rowToRemove, setRowToRemove] = useState(null);
   // An error message to show. Empty when there's no error.
@@ -286,6 +288,8 @@ function CourseworkContent({ data, onUpdate }) {
     });
     // Remember which row is being edited.
     setEditingId(row.id);
+    // Scroll to the form, which may be out of view above the course list.
+    formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
     // Clear any old error.
     setError("");
   }
@@ -387,7 +391,7 @@ function CourseworkContent({ data, onUpdate }) {
       </section>
 
       {/* The form for adding or editing a course. */}
-      <form onSubmit={handleSubmit} aria-labelledby="form-heading" className="rounded-2xl border border-line bg-panel p-5 sm:p-6">
+      <form ref={formRef} onSubmit={handleSubmit} aria-labelledby="form-heading" className={`rounded-2xl border bg-panel p-5 sm:p-6 ${editingId ? "border-sage" : "border-line"}`}>
         {/* The heading changes when editing. */}
         <h2 id="form-heading" className="font-display text-lg font-semibold text-white">{editingId ? "Edit course" : "Add a course"}</h2>
         {/* The form's fields, in a responsive grid. */}
@@ -515,7 +519,7 @@ function CourseworkContent({ data, onUpdate }) {
           {/* One row for each course. */}
           {data.my_courses.map((row) => (
             // The row's container.
-            <li key={row.id} className="flex flex-wrap items-center gap-3 rounded-xl border border-line bg-panel px-4 py-3 text-sm">
+            <li key={row.id} className={`flex flex-wrap items-center gap-3 rounded-xl border bg-panel px-4 py-3 text-sm ${editingId === row.id ? "border-sage" : "border-line"}`}>
               {/* The course's code and name, taking up the free space. */}
               <div className="min-w-0 flex-1 basis-56">
                 {/* The course code. */}
@@ -524,15 +528,17 @@ function CourseworkContent({ data, onUpdate }) {
                 <p className="text-mist/70">{row.title}</p>
                 {/* For a manual course, show that it was entered manually and its department. */}
                 {row.is_manual && <p className="mt-1 text-xs text-mist/50">Entered manually · {row.department === "cs" ? "CS department" : "Non-CS department"}{row.is_research ? " · Independent study or research" : ""}</p>}
+                {/* Why this course counts differently than the student might expect. */}
+                {row.note && <p className="mt-2 text-xs text-amber-200">{row.note}</p>}
               </div>
               {/* The term, year and credits. */}
               <span className="text-mist/60">{row.term === "fall" ? "Fall" : "Spring"} {row.year} · {row.credits} cr</span>
               {/* The grade, or "In progress" if there isn't one. */}
               <span className="rounded-full border border-line px-3 py-1 text-xs text-mist">{row.grade ?? "In progress"}</span>
               {/* Loads this course into the form above. */}
-              <button type="button" onClick={() => startEditing(row)} className="text-sage underline underline-offset-4 hover:text-sage-light">Edit</button>
+              <button type="button" onClick={() => startEditing(row)} aria-pressed={editingId === row.id} className={`rounded-md px-2 py-1 text-sage underline underline-offset-4 transition-colors hover:bg-sage/15 hover:text-sage-light ${editingId === row.id ? "bg-sage/15 font-semibold" : ""}`}>{editingId === row.id ? "Editing" : "Edit"}</button>
               {/* Removes this course. */}
-              <button type="button" disabled={saving} onClick={() => setRowToRemove(row)} className="text-mist/70 underline underline-offset-4 hover:text-white disabled:opacity-50">Remove</button>
+              <button type="button" disabled={saving} onClick={() => setRowToRemove(row)} className="rounded-md px-2 py-1 text-mist/70 underline underline-offset-4 transition-colors hover:bg-white/10 hover:text-white disabled:opacity-50">Remove</button>
             </li>
           ))}
         </ul>

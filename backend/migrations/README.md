@@ -144,6 +144,24 @@ Valid values are `pending`, `approved` and `declined`.
 3. Show their notifications from `GET /api/notifications/me`. Marking one as read isn't
    built yet.
 
+# Student profile
+
+Apply `007_create_student_profiles.sql` in the Neon SQL editor. It adds the
+`student_profiles` table, without changing existing data. A student clicks their name in
+the navbar and chooses Profile to view it at `/student/profile`, then clicks Edit profile to change
+their name, research interests, lab, education, bio, or their website, GitHub, Google
+Scholar and LinkedIn links. The name is saved in `users`, and the rest in
+`student_profiles`. Their advisor, start term, enrollment and advanced standing are shown
+from their record, and can't be edited there. Only the student can see or change their
+own profile for now.
+
+Then apply `008_add_student_profile_picture.sql`. It adds the columns for a profile
+picture, a PNG or JPG of up to 2 MB, which shows beside the student's name in the navbar
+and on their profile page. Students without a picture show their initials.
+
+Then apply `009_update_student_profile_fields.sql`. It adds the research and link columns,
+and removes the department column, because every student is in Computer Science.
+
 # Milestone submission
 
 ## Migration
@@ -173,6 +191,13 @@ advisor can record a decision before the presentation until scheduling is built.
    request needs an optional `comment` field for this.
 4. When a faculty member approves or declines a committee invitation, notify the student
    by adding a `Notification` row for them.
+
+## Completed or Approved
+
+Students see "Completed" for milestones the app finishes by itself (Coursework, Advisor
+declaration and Committee formation), and "Approved" when a person decides. In the
+database, all of them still use the `approved` status. The list is `AUTOMATIC_MILESTONES`
+in `app/modules/milestones/models.py`.
 
 ## Notifications
 

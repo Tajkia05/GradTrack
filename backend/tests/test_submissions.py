@@ -240,6 +240,21 @@ class SubmissionTests(unittest.TestCase):
         # The notification names the date and time.
         self.assertRegex(self.messages(self.lisa.id)[-1], r"was approved on .+ \d{4} at \d{1,2}:\d{2} [AP]M ET")
 
+    # The dashboard uses "completed" for automatic milestones, and "approved" when a person decides.
+    def test_wording_matches_how_a_milestone_finishes(self):
+        # Read the dashboard.
+        milestones = self.client.get("/api/students/me/milestones", headers=self.headers(self.lisa)).json()["milestones"]
+        # List each milestone with whether it's automatic.
+        automatic = {item["name"]: item["is_automatic"] for item in milestones}
+        # The app finishes these by itself.
+        self.assertTrue(automatic["Coursework"] and automatic["Advisor declaration"] and automatic["Committee formation"])
+        # A person decides these.
+        self.assertFalse(automatic["Comprehensive exam"] or automatic["Dissertation proposal"] or automatic["Dissertation defense"])
+        # Find the proposal, which needs the exam and the committee.
+        proposal = next(item for item in milestones if item["name"] == "Dissertation proposal")
+        # Its requirements use the matching words.
+        self.assertEqual({item["explanation"] for item in proposal["requirements"]}, {"Comprehensive exam must be approved.", "Committee formation is completed."})
+
     # A milestone that isn't approved has no approval time.
     def test_unapproved_milestone_has_no_approval_time(self):
         # Lisa submits.

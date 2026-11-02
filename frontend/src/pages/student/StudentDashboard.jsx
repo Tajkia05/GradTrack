@@ -32,7 +32,7 @@ function formatDate(value) {
 }
 
 // onProgressChanged reloads the dashboard after a student changes their courses or committee.
-// Shows an exact approval time, e.g. "Nov 2, 2026, 3:30 PM".
+// Shows an exact date and time, e.g. "Nov 2, 2026, 3:30 PM".
 function formatDateTime(value) {
   // Use the viewer's own time zone.
   return new Intl.DateTimeFormat("en-US", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value));
@@ -41,6 +41,8 @@ function formatDateTime(value) {
 function MilestoneCard({ milestone, onProgressChanged }) {
   const completed = milestone.category === "completed";
   const isAdvisorDeclaration = completed && milestone.name.toLowerCase() === "advisor declaration";
+  // "Completed" for milestones the app finishes by itself, and "Approved" when a person decides.
+  const finishedWord = milestone.is_automatic ? "Completed" : "Approved";
   return (
     <details className="group rounded-xl border border-line bg-panel open:border-sage/40">
       <summary className="flex cursor-pointer list-none flex-wrap items-center gap-3 rounded-xl p-4 focus-visible:outline-2 focus-visible:outline-sage sm:p-5 [&::-webkit-details-marker]:hidden">
@@ -55,13 +57,13 @@ function MilestoneCard({ milestone, onProgressChanged }) {
         </div>
         <div className="flex flex-wrap items-center gap-3 text-xs sm:text-sm">
           <span className="text-mist/60">
-            {/* An approval shows its exact time when recorded, and otherwise only its date. */}
-            {completed ? (milestone.approved_at ? `Approved ${formatDateTime(milestone.approved_at)}` : milestone.completed_on ? `Approved ${formatDate(milestone.completed_on)}` : "Approval date unavailable")
+            {/* A finished milestone shows its exact time when recorded, and otherwise only its date. */}
+            {completed ? (milestone.approved_at ? `${finishedWord} ${formatDateTime(milestone.approved_at)}` : milestone.completed_on ? `${finishedWord} ${formatDate(milestone.completed_on)}` : "Date unavailable")
               : milestone.deadline_label ? `Due ${milestone.deadline_label}` : "No scheduled deadline"}
           </span>
           {milestone.overdue && <span className="font-medium text-amber-200">Overdue</span>}
           <span className={`rounded-full border px-3 py-1 text-xs ${completed ? "border-sage/25 bg-sage/10 text-sage" : "border-line text-mist"}`}>
-            {isAdvisorDeclaration ? "Completed" : STATUS_LABELS[milestone.status] || milestone.status}
+            {completed ? finishedWord : STATUS_LABELS[milestone.status] || milestone.status}
           </span>
           <span aria-hidden="true" className="text-mist/50 transition-transform group-open:rotate-180">⌄</span>
         </div>
@@ -78,7 +80,7 @@ function MilestoneCard({ milestone, onProgressChanged }) {
             </div>
             <AdvisorDeclarationDetails />
           </div>
-        ) : <p>{completed ? "This milestone has been approved." : milestone.eligible ? "Prerequisites are met. This milestone is available to work on." : "This milestone is waiting on the requirements below."}</p>}
+        ) : <p>{completed ? `This milestone has been ${finishedWord.toLowerCase()}.` : milestone.eligible ? "Prerequisites are met. This milestone is available to work on." : "This milestone is waiting on the requirements below."}</p>}
         {/* Only the Coursework card gets the credit summary and button. */}
         {milestone.name.toLowerCase() === "coursework" && <Coursework onChanged={onProgressChanged} />}
         {/* Only the Committee formation card gets the committee summary and button. */}
@@ -176,7 +178,7 @@ export default function StudentDashboard() {
         <p className="mt-3 text-base font-medium text-mist">
           Progress as of <time dateTime={data.as_of} className="font-semibold text-sage">{formatDate(data.as_of)}</time>
         </p>
-        <div role="progressbar" aria-label="Approved milestones" aria-valuenow={summary.percent} aria-valuemin={0} aria-valuemax={100} aria-valuetext={`${summary.completed} of ${summary.total} milestones approved`} className="my-5 h-3 overflow-hidden rounded-full bg-ink">
+        <div role="progressbar" aria-label="Finished milestones" aria-valuenow={summary.percent} aria-valuemin={0} aria-valuemax={100} aria-valuetext={`${summary.completed} of ${summary.total} milestones finished`} className="my-5 h-3 overflow-hidden rounded-full bg-ink">
           <div className="h-full rounded-full bg-sage" style={{ width: `${summary.percent}%` }} />
         </div>
         <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm text-mist/65">
@@ -226,7 +228,7 @@ export default function StudentDashboard() {
               <span className="rounded-full bg-panel px-2 py-0.5 text-xs text-mist/60">{items.length}</span>
             </div>
             {items.length > 0 ? <div className="space-y-2">{visible.map((milestone) => <MilestoneCard key={milestone.id} milestone={milestone} onProgressChanged={refreshDashboard} />)}</div>
-              : <p className="rounded-xl border border-dashed border-line px-5 py-4 text-sm text-mist/50">{key === "completed" ? "Your first approval will appear here." : `No ${title.toLowerCase()} milestones.`}</p>}
+              : <p className="rounded-xl border border-dashed border-line px-5 py-4 text-sm text-mist/50">{key === "completed" ? "Your first finished milestone will appear here." : `No ${title.toLowerCase()} milestones.`}</p>}
             {key === "completed" && activeSection === "all" && items.length > 1 && <button aria-expanded={showAllCompleted} onClick={() => setShowAllCompleted((value) => !value)} className="mt-3 text-sm text-sage underline underline-offset-4 hover:text-sage-light">{showAllCompleted ? "Show less" : `Show ${items.length - 1} more`}</button>}
             {items.length > 0 && key !== "completed" && <p className="mt-2 text-xs text-mist/45">{description} Select a milestone to see details.</p>}
           </section>
