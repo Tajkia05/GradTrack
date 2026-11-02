@@ -22,9 +22,7 @@ from app.modules.committee.service import sync_committee_milestone
 from app.modules.milestones.models import Milestone, MilestoneStatus, StudentMilestone
 # The dashboard's rules for what's blocked.
 from app.modules.student.service import get_dashboard
-# Tells the advisor about a new submission.
-from app.modules.notifications.models import Notification
-# Records a status change and tells the student.
+# Records a status change and tells the student and advisor.
 from app.modules.submissions.history import record_status_change
 # This module's tables.
 from app.modules.submissions.models import MilestoneStatusHistory, MilestoneSubmission, SubmissionDocument
@@ -207,12 +205,8 @@ def submit_milestone(db: Session, student: User, milestone_id: int, body: Submis
     progress.status = MilestoneStatus.SUBMITTED
     # It isn't approved, so it has no approval date.
     progress.completed_on = None
-    # Record the change in the history, and tell the student.
+    # Record the change in the history, and tell the advisor there's something to review.
     record_status_change(db, student.id, milestone.id, MilestoneStatus.SUBMITTED, student.id)
-    # Tell the advisor there's something to review.
-    if student.advisor_id is not None:
-        # Add the advisor's notification.
-        db.add(Notification(user_id=student.advisor_id, message=f"{student.full_name} submitted {milestone.name} for your review."))
     # Save everything together.
     db.commit()
     # Return the updated popup data.

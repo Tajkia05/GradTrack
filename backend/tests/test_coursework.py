@@ -552,6 +552,29 @@ class CourseworkTests(unittest.TestCase):
         # She removes it, and it works.
         self.assertEqual(self.client.delete(f"/api/students/me/courses/{row_id}", headers=self.headers(self.lisa)).status_code, 200)
 
+    # Completing Coursework tells the advisor, and losing it tells them too.
+    def test_coursework_changes_notify_the_advisor(self):
+        # Sam's advisor is faculty 1, and he starts with one course short of everything else.
+        for course_id in (1, 2, 3, 4, 6, 10, 11, 12, 13):
+            # Add each 3-credit course directly to the database.
+            self.db.add(StudentCourse(student_id=self.sam.id, course_id=course_id, credits=3, term=Term.SPRING, year=2024, grade="A"))
+        # Add 15 credits of independent study.
+        self.db.add(StudentCourse(student_id=self.sam.id, course_id=9, credits=15, term=Term.SPRING, year=2024, grade="A"))
+        # Save these rows.
+        self.db.commit()
+        # The last course takes him to 45, and its row is found.
+        row = next(item for item in self.add(14, user=self.sam).json()["my_courses"] if item["course_id"] == 14)
+        # Read the advisor's messages.
+        messages = [item.message for item in self.db.scalars(select(Notification).where(Notification.user_id == 1).order_by(Notification.id))]
+        # The advisor is told he completed it.
+        self.assertIn("Sam completed Coursework on", messages[-1])
+        # He removes that course.
+        self.client.delete(f"/api/students/me/courses/{row['id']}", headers=self.headers(self.sam))
+        # Read the advisor's messages again.
+        messages = [item.message for item in self.db.scalars(select(Notification).where(Notification.user_id == 1).order_by(Notification.id))]
+        # The advisor is told he no longer meets the requirements.
+        self.assertEqual(messages[-1], "Sam no longer meets the requirements for Coursework.")
+
     # Returns the note on a course in the response, found by its course id.
     def note(self, data, course_id, year=2025):
         # Find the row for this course and year, then return its note.

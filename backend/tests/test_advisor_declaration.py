@@ -10,6 +10,8 @@ import test_student_dashboard as fixtures
 from app.modules.milestones.models import Milestone, MilestoneStatus, StudentMilestone
 from app.modules.student.advisor_service import declare_advisor
 from app.modules.faculty.models import FacultyProfile
+# Reads the advisor's notifications.
+from app.modules.notifications.models import Notification
 
 
 class AdvisorDeclarationTests(unittest.TestCase):
@@ -21,6 +23,14 @@ class AdvisorDeclarationTests(unittest.TestCase):
     def declare(self, advisor_id=1, user=None, **extra):
         return self.client.put("/api/students/me/advisor", headers=self.headers(user or self.lisa),
                                json={"advisor_id": advisor_id, **extra})
+
+    def test_declaring_notifies_the_advisor_once(self):
+        # Lisa declares her advisor.
+        self.assertEqual(self.declare().status_code, 200)
+        # Retrying the same declaration works, and doesn't send a second message.
+        self.assertEqual(self.declare().status_code, 200)
+        # The advisor has exactly one message, naming the student.
+        self.assertEqual([row.message for row in self.db.scalars(select(Notification).where(Notification.user_id == 1))], ["Lisa declared you as their research advisor."])
 
     def test_list_only_faculty_and_public_fields(self):
         response = self.client.get("/api/students/me/advisors", headers=self.headers(self.lisa))

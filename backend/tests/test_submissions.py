@@ -223,6 +223,17 @@ class SubmissionTests(unittest.TestCase):
             # The student's newest message says so.
             self.assertIn(words, self.messages(self.lisa.id)[-1])
 
+    # The advisor isn't notified about their own decisions.
+    def test_advisor_is_not_notified_about_their_own_decision(self):
+        # Lisa submits, which tells the advisor once.
+        self.submit()
+        # Count the advisor's messages.
+        before = len(self.messages(self.faculty.id))
+        # The advisor approves.
+        self.review("approved")
+        # They have no new messages.
+        self.assertEqual(len(self.messages(self.faculty.id)), before)
+
     # An approval shows its exact time on the dashboard, in the popup, and in the notification.
     def test_approval_shows_date_and_time(self):
         # Lisa submits.

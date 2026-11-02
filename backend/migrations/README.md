@@ -140,9 +140,22 @@ Valid values are `pending`, `approved` and `declined`.
    `faculty_id` is their user id and `status` is `pending`.
 2. Let them approve or decline, by setting that row's `status` to `approved` or
    `declined`. Only the invited faculty member may change their own row. Nothing else
-   is needed, because Committee formation is worked out from these rows.
-3. Show their notifications from `GET /api/notifications/me`. Marking one as read isn't
-   built yet.
+   is needed for the milestone, because Committee formation is worked out from these rows.
+3. When they respond, notify the student by adding a `Notification` row with the
+   student's id as `user_id`.
+
+## Notifications
+
+| Event | Who is notified |
+| --- | --- |
+| Student declares an advisor | The advisor |
+| Student invites or removes a faculty member | That faculty member |
+| Student submits a milestone | The advisor |
+| Advisor approves, requests a revision or rejects | The student |
+| Coursework, Committee formation or Candidacy completes or reopens | The student and their advisor |
+
+A manual database edit doesn't create a notification, except that a committee completed
+this way is noticed the next time the student opens their dashboard.
 
 # Candidacy
 
@@ -197,8 +210,6 @@ advisor can record a decision before the presentation until scheduling is built.
    `record_status_change` from `app.modules.submissions.history`, which saves the history
    and notifies the student. Pass the reviewer's comment as its last argument. The review
    request needs an optional `comment` field for this.
-4. When a faculty member approves or declines a committee invitation, notify the student
-   by adding a `Notification` row for them.
 
 ## Completed or Approved
 

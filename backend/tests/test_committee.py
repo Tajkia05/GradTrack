@@ -373,6 +373,35 @@ class CommitteeTests(unittest.TestCase):
         # It stays approved.
         self.assertEqual(row.status, MilestoneStatus.APPROVED)
 
+    # Returns a user's notification messages, oldest first.
+    def messages(self, user_id):
+        # Discard cached rows so the latest values are read.
+        self.db.expire_all()
+        # Read the messages.
+        return [row.message for row in self.db.scalars(select(Notification).where(Notification.user_id == user_id).order_by(Notification.id))]
+
+    # A completed committee tells the student and their advisor.
+    def test_completion_notifies_student_and_advisor(self):
+        # Complete the committee directly in the database.
+        self.approve_all(10, 11, external=True)
+        # Opening the page updates the milestone.
+        self.page()
+        # The student is told.
+        self.assertIn("Committee formation was completed on", self.messages(self.lisa.id)[-1])
+        # The advisor is told.
+        self.assertIn("Lisa completed Committee formation on", self.messages(1)[-1])
+
+    # Falling below the requirement tells the advisor.
+    def test_reopening_notifies_the_advisor(self):
+        # Complete the committee directly in the database.
+        self.approve_all(10, 11, external=True)
+        # Opening the page approves the milestone, and Ann's row id is read.
+        row_id = next(member["id"] for member in self.page()["members"] if member["name"] == "Ann")
+        # Lisa removes Ann.
+        self.client.delete(f"/api/students/me/committee/{row_id}", headers=self.headers(self.lisa))
+        # The advisor is told.
+        self.assertEqual(self.messages(1)[-1], "Lisa no longer meets the requirements for Committee formation.")
+
     # A user only sees their own notifications.
     def test_notifications_are_private(self):
         # Lisa invites Ann, which notifies Ann.

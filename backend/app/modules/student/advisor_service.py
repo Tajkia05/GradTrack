@@ -8,6 +8,8 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.modules.milestones.models import Milestone, MilestoneStatus, StudentMilestone
+# Tells the advisor about a new declaration.
+from app.modules.notifications.models import Notification
 from app.modules.users.models import Role, User
 from app.modules.faculty.models import FacultyProfile
 
@@ -78,8 +80,11 @@ def declare_advisor(db: Session, student_id: int, advisor_id: int) -> User:
         if progress.status != MilestoneStatus.APPROVED or progress.completed_on is None:
             progress.completed_on = today
         progress.status = MilestoneStatus.APPROVED
+        # A new declaration tells the advisor. Retrying the same one doesn't send it twice.
+        if student.advisor_id != advisor.id:
+            db.add(Notification(user_id=advisor.id, message=f"{student.full_name} declared you as their research advisor."))
         student.advisor_id = advisor.id
-        db.commit()  # Both records succeed together, or neither is saved.
+        db.commit()  # All the records succeed together, or none are saved.
         db.refresh(student)
         return student
     except Exception:

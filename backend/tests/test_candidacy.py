@@ -87,6 +87,15 @@ class CandidacyTests(unittest.TestCase):
         # The student is told.
         self.assertIn("Candidacy was completed on", self.db.scalars(select(Notification).where(Notification.user_id == self.raj.id)).all()[-1].message)
 
+    # Completing Candidacy tells the advisor.
+    def test_completing_candidacy_notifies_the_advisor(self):
+        # Raise the GPA, which completes it.
+        self.set_gpa("3.50")
+        # Open the dashboard, which saves it.
+        self.card()
+        # Raj's advisor is faculty 1, and is told.
+        self.assertIn("Raj completed Candidacy on", self.db.scalars(select(Notification).where(Notification.user_id == 1)).all()[-1].message)
+
     # An unapproved proposal blocks Candidacy, even with everything else met.
     def test_unapproved_proposal_blocks_candidacy(self):
         # Raise the GPA.
