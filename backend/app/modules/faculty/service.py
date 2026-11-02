@@ -6,8 +6,10 @@ from zoneinfo import ZoneInfo
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.modules.committee.models import CommitteeMember
 from app.modules.faculty.schemas import (
     AssignedStudentOut,
+    CommitteeInvitationOut,
     FacultyDashboardOut,
     FacultyProfile,
     FacultySummary,
@@ -149,6 +151,7 @@ def get_faculty_dashboard(
         pending_reviews=pending_reviews,
     )
 
+
 def review_student_milestone(
     db: Session,
     faculty: User,
@@ -191,3 +194,55 @@ def review_student_milestone(
     db.refresh(progress)
 
     return progress
+
+
+def get_pending_committee_invitations(
+    db: Session,
+    faculty: User,
+) -> list[CommitteeInvitationOut]:
+    rows = db.execute(
+        select(CommitteeMember, User)
+        .join(User, User.id == CommitteeMember.student_id)
+        .where(
+            CommitteeMember.faculty_id == faculty.id,
+            CommitteeMember.status == "pending",
+        )
+        .order_by(CommitteeMember.id)
+    ).all()
+
+    return [
+        CommitteeInvitationOut(
+            id=invitation.id,
+            student_id=student.id,
+            student_name=student.full_name,
+            invited_on=invitation.invited_on,
+        )
+        for invitation, student in rows
+    ]
+
+
+def respond_to_committee_invitation(
+    db: Session,
+    faculty: User,
+    invitation_id: int,
+    new_status: str,
+) -> CommitteeMember | None:
+    invitation = db.scalar(
+        select(CommitteeMember).where(
+            CommitteeMember.id == invitation_id,
+            CommitteeMember.faculty_id == faculty.id,
+        )
+    )
+
+    if invitation is None:
+        return None
+
+    if invitation.status != "pending":
+        return None
+
+    invitation.status = new_status
+
+    db.commit()
+    db.refresh(invitation)
+
+    return invitation

@@ -12,6 +12,7 @@ from sqlalchemy.pool import StaticPool
 from app.core.database import Base, get_db
 from app.core.security import create_access_token
 from app.main import app
+from app.modules.committee.models import CommitteeMember
 from app.modules.faculty.service import get_faculty_dashboard
 from app.modules.milestones.models import (
     Milestone,
@@ -374,6 +375,251 @@ class FacultyDashboardTests(unittest.TestCase):
             400,
         )
 
+    def test_faculty_sees_own_pending_committee_invitation(self):
+        invitation = CommitteeMember(
+            student_id=self.other_student.id,
+            faculty_id=self.faculty.id,
+            status="pending",
+            invited_on=date(2026, 11, 1),
+        )
+
+        self.db.add(invitation)
+        self.db.commit()
+
+        response = self.client.get(
+            "/api/faculty/me/committee-invitations",
+            headers=self.headers(self.faculty),
+        )
+
+        self.assertEqual(
+            response.status_code,
+            200,
+        )
+
+        invitations = response.json()
+
+        self.assertEqual(
+            len(invitations),
+            1,
+        )
+
+        self.assertEqual(
+            invitations[0]["student_name"],
+            "Other Student",
+        )
+
+        self.assertEqual(
+            invitations[0]["student_id"],
+            self.other_student.id,
+        )
+
+    def test_faculty_does_not_see_other_faculty_invitation(self):
+        invitation = CommitteeMember(
+            student_id=self.student.id,
+            faculty_id=self.other_faculty.id,
+            status="pending",
+            invited_on=date(2026, 11, 1),
+        )
+
+        self.db.add(invitation)
+        self.db.commit()
+
+        response = self.client.get(
+            "/api/faculty/me/committee-invitations",
+            headers=self.headers(self.faculty),
+        )
+
+        self.assertEqual(
+            response.status_code,
+            200,
+        )
+
+        self.assertEqual(
+            response.json(),
+            [],
+        )
+
+    def test_faculty_can_approve_committee_invitation(self):
+        invitation = CommitteeMember(
+            student_id=self.other_student.id,
+            faculty_id=self.faculty.id,
+            status="pending",
+            invited_on=date(2026, 11, 1),
+        )
+
+        self.db.add(invitation)
+        self.db.commit()
+
+        invitation_id = invitation.id
+
+        response = self.client.patch(
+            f"/api/faculty/committee-invitations/{invitation_id}",
+            headers=self.headers(self.faculty),
+            json={"status": "approved"},
+        )
+
+        self.assertEqual(
+            response.status_code,
+            200,
+        )
+
+        self.assertEqual(
+            response.json()["status"],
+            "approved",
+        )
+
+        self.db.expire_all()
+
+        saved = self.db.get(
+            CommitteeMember,
+            invitation_id,
+        )
+
+        self.assertEqual(
+            saved.status,
+            "approved",
+        )
+
+    def test_faculty_can_decline_committee_invitation(self):
+        invitation = CommitteeMember(
+            student_id=self.other_student.id,
+            faculty_id=self.faculty.id,
+            status="pending",
+            invited_on=date(2026, 11, 1),
+        )
+
+        self.db.add(invitation)
+        self.db.commit()
+
+        invitation_id = invitation.id
+
+        response = self.client.patch(
+            f"/api/faculty/committee-invitations/{invitation_id}",
+            headers=self.headers(self.faculty),
+            json={"status": "declined"},
+        )
+
+        self.assertEqual(
+            response.status_code,
+            200,
+        )
+
+        self.assertEqual(
+            response.json()["status"],
+            "declined",
+        )
+
+    def test_faculty_cannot_answer_other_faculty_invitation(self):
+        invitation = CommitteeMember(
+            student_id=self.student.id,
+            faculty_id=self.other_faculty.id,
+            status="pending",
+            invited_on=date(2026, 11, 1),
+        )
+
+        self.db.add(invitation)
+        self.db.commit()
+
+        invitation_id = invitation.id
+
+        response = self.client.patch(
+            f"/api/faculty/committee-invitations/{invitation_id}",
+            headers=self.headers(self.faculty),
+            json={"status": "approved"},
+        )
+
+        self.assertEqual(
+            response.status_code,
+            404,
+        )
+
+        self.db.expire_all()
+
+        saved = self.db.get(
+            CommitteeMember,
+            invitation_id,
+        )
+
+        self.assertEqual(
+            saved.status,
+            "pending",
+        )
+
+    def test_faculty_cannot_answer_invitation_twice(self):
+        invitation = CommitteeMember(
+            student_id=self.other_student.id,
+            faculty_id=self.faculty.id,
+            status="approved",
+            invited_on=date(2026, 11, 1),
+        )
+
+        self.db.add(invitation)
+        self.db.commit()
+
+        invitation_id = invitation.id
+
+        response = self.client.patch(
+            f"/api/faculty/committee-invitations/{invitation_id}",
+            headers=self.headers(self.faculty),
+            json={"status": "declined"},
+        )
+
+        self.assertEqual(
+            response.status_code,
+            404,
+        )
+
+    def test_removed_committee_invitation_returns_clear_message(self):
+        response = self.client.patch(
+            "/api/faculty/committee-invitations/9999",
+            headers=self.headers(self.faculty),
+            json={"status": "approved"},
+        )
+
+        self.assertEqual(
+            response.status_code,
+            404,
+        )
+
+        self.assertIn(
+            "student may have removed it",
+            response.json()["detail"].lower(),
+        )
+
+    def test_student_cannot_access_faculty_committee_invitations(self):
+        response = self.client.get(
+            "/api/faculty/me/committee-invitations",
+            headers=self.headers(self.student),
+        )
+
+        self.assertEqual(
+            response.status_code,
+            403,
+        )
+
+    def test_invalid_committee_invitation_response_is_rejected(self):
+        invitation = CommitteeMember(
+            student_id=self.other_student.id,
+            faculty_id=self.faculty.id,
+            status="pending",
+            invited_on=date(2026, 11, 1),
+        )
+
+        self.db.add(invitation)
+        self.db.commit()
+
+        response = self.client.patch(
+            f"/api/faculty/committee-invitations/{invitation.id}",
+            headers=self.headers(self.faculty),
+            json={"status": "pending"},
+        )
+
+        self.assertEqual(
+            response.status_code,
+            400,
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
+    
