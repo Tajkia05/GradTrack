@@ -7,6 +7,11 @@ import AdvisorDeclarationDetails from "./AdvisorDeclarationDetails.jsx";
 import Coursework from "./Coursework.jsx";
 // The summary, button and popup on the Committee formation card.
 import Committee from "./Committee.jsx";
+// The button and popup for submitting a milestone's documents.
+import MilestoneSubmission from "./MilestoneSubmission.jsx";
+
+// The milestones that are submitted with documents and reviewed by the advisor.
+const SUBMITTABLE_MILESTONES = ["comprehensive exam", "dissertation proposal", "dissertation defense"];
 
 const STATUS_LABELS = {
   not_started: "Not started", in_progress: "In progress", submitted: "Submitted",
@@ -27,6 +32,12 @@ function formatDate(value) {
 }
 
 // onProgressChanged reloads the dashboard after a student changes their courses or committee.
+// Shows an exact approval time, e.g. "Nov 2, 2026, 3:30 PM".
+function formatDateTime(value) {
+  // Use the viewer's own time zone.
+  return new Intl.DateTimeFormat("en-US", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value));
+}
+
 function MilestoneCard({ milestone, onProgressChanged }) {
   const completed = milestone.category === "completed";
   const isAdvisorDeclaration = completed && milestone.name.toLowerCase() === "advisor declaration";
@@ -44,7 +55,8 @@ function MilestoneCard({ milestone, onProgressChanged }) {
         </div>
         <div className="flex flex-wrap items-center gap-3 text-xs sm:text-sm">
           <span className="text-mist/60">
-            {completed ? (milestone.completed_on ? formatDate(milestone.completed_on) : "Approval date unavailable")
+            {/* An approval shows its exact time when recorded, and otherwise only its date. */}
+            {completed ? (milestone.approved_at ? `Approved ${formatDateTime(milestone.approved_at)}` : milestone.completed_on ? `Approved ${formatDate(milestone.completed_on)}` : "Approval date unavailable")
               : milestone.deadline_label ? `Due ${milestone.deadline_label}` : "No scheduled deadline"}
           </span>
           {milestone.overdue && <span className="font-medium text-amber-200">Overdue</span>}
@@ -71,6 +83,8 @@ function MilestoneCard({ milestone, onProgressChanged }) {
         {milestone.name.toLowerCase() === "coursework" && <Coursework onChanged={onProgressChanged} />}
         {/* Only the Committee formation card gets the committee summary and button. */}
         {milestone.name.toLowerCase() === "committee formation" && <Committee onChanged={onProgressChanged} />}
+        {/* These milestones get the submission button. */}
+        {SUBMITTABLE_MILESTONES.includes(milestone.name.toLowerCase()) && <MilestoneSubmission milestoneId={milestone.id} milestoneName={milestone.name} onChanged={onProgressChanged} />}
         {milestone.requirements.length > 0 && <ul className="space-y-2">
           {milestone.requirements.map((requirement) => (
             <li key={requirement.name} className="flex gap-2">

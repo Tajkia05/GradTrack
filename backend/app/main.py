@@ -15,6 +15,8 @@ from app.modules.coursework.router import router as coursework_router
 from app.modules.committee.router import router as committee_router
 # The endpoint for reading notifications.
 from app.modules.notifications.router import router as notifications_router
+# The milestone submission and document endpoints.
+from app.modules.submissions.router import router as submissions_router
 
 # Create the backend app.
 app = FastAPI(title="GradTrack API")
@@ -41,6 +43,8 @@ app.include_router(coursework_router, prefix="/api")
 app.include_router(committee_router, prefix="/api")
 # Plug in the notifications endpoint.
 app.include_router(notifications_router, prefix="/api")
+# Plug in the milestone submission endpoints.
+app.include_router(submissions_router, prefix="/api")
 
 
 # A simple "is the server running?" check. Visit /api/health to test.

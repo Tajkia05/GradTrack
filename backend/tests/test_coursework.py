@@ -19,6 +19,8 @@ import test_student_dashboard as fixtures
 from app.modules.coursework.models import Course, StudentCourse
 # The milestone statuses and each student's milestone progress.
 from app.modules.milestones.models import MilestoneStatus, StudentMilestone
+# The notifications table.
+from app.modules.notifications.models import Notification
 # The Spring/Fall choice.
 from app.modules.users.models import Term
 
@@ -274,6 +276,8 @@ class CourseworkTests(unittest.TestCase):
         self.assertEqual(milestone.status, MilestoneStatus.APPROVED)
         # The approval date is recorded.
         self.assertIsNotNone(milestone.completed_on)
+        # The student is told, with the date and time.
+        self.assertIn("Coursework was approved on", self.db.scalars(select(Notification).where(Notification.user_id == self.lisa.id)).all()[-1].message)
 
     # 45 credits aren't enough if the core and breadth average is below B+.
     def test_low_average_does_not_approve_the_milestone(self):

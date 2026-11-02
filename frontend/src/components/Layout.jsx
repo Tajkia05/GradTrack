@@ -6,6 +6,8 @@ import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext.jsx";
 import { roleLabel } from "../auth/roles.js";
 import logoMark from "../assets/gradtrack-mark.png";
+// The bell with the user's notifications.
+import NotificationBell from "./NotificationBell.jsx";
 
 // The navbar links for each role. Each user only sees their own role's links.
 // When a teammate adds a page, they add its link here under the right role.
@@ -51,6 +53,8 @@ export default function Layout() {
 
           {/* Right side: who is logged in + log out button. "ml-auto" pushes it to the right. */}
           <div className="ml-auto flex items-center gap-3 text-sm">
+            {/* The notifications bell. */}
+            <NotificationBell />
             <span className="text-mist">
               {user.full_name} <span className="text-mist/50">({roleLabel(user.role)})</span>
             </span>

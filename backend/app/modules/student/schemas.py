@@ -1,6 +1,6 @@
 """Student dashboard responses and advisor input. Never expose authentication fields."""
 
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal
 from typing import Literal
 
@@ -62,6 +62,8 @@ class MilestoneOut(BaseModel):
     status: MilestoneStatus
     category: Literal["current", "blocked", "upcoming", "completed"]
     completed_on: date | None
+    # The exact approval date and time. Empty if it isn't approved, or the time wasn't recorded.
+    approved_at: datetime | None = None
     deadline_semester: int | None
     deadline_label: str | None
     overdue: bool

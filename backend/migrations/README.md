@@ -143,3 +143,39 @@ Valid values are `pending`, `approved` and `declined`.
    is needed, because Committee formation is worked out from these rows.
 3. Show their notifications from `GET /api/notifications/me`. Marking one as read isn't
    built yet.
+
+# Milestone submission
+
+## Migration
+
+Apply `006_create_milestone_submissions.sql` in the Neon SQL editor. It adds the
+`milestone_submissions`, `submission_documents` and `milestone_status_history` tables,
+without changing existing data.
+
+## How it works
+
+The comprehensive exam, dissertation proposal and dissertation defense use this flow.
+Their prerequisites come from the dashboard's rules. A student uploads up to 5 PDF, DOCX,
+PPTX or PNG files of up to 10 MB each, and the status becomes `submitted`, which puts the
+milestone on the advisor's review list. After a revision request, the student can submit
+again as a new attempt, and earlier attempts are kept. Files are stored in the database,
+so every teammate's backend can open them. Presentation dates aren't checked yet, so an
+advisor can record a decision before the presentation until scheduling is built.
+
+## Faculty side (still to build)
+
+1. List a student's submissions and files with
+   `GET /api/faculty/students/{student_id}/milestones/{milestone_id}/submissions`.
+2. Download a file with `GET /api/milestone-documents/{id}`, sending the login token.
+3. Add a comment box to the review. `review_student_milestone` already calls
+   `record_status_change` from `app.modules.submissions.history`, which saves the history
+   and notifies the student. Pass the reviewer's comment as its last argument. The review
+   request needs an optional `comment` field for this.
+4. When a faculty member approves or declines a committee invitation, notify the student
+   by adding a `Notification` row for them.
+
+## Notifications
+
+`record_status_change` saves each milestone status change with its exact time, and
+notifies the student. The navbar's bell shows every user their notifications. Approvals
+from before this feature, and advisor declarations, show only a date.

@@ -8,6 +8,8 @@ from sqlalchemy.orm import Session
 
 from app.modules.milestones.models import Milestone, MilestonePrerequisite, MilestoneStatus, StudentMilestone
 from app.modules.student.schemas import DashboardOut, MilestoneOut, ProgressSummary, RequirementOut, StudentProfile
+# The status history holds the exact time of each approval.
+from app.modules.submissions.models import MilestoneStatusHistory
 from app.modules.users.models import EnrollmentStatus, Term, User
 
 
@@ -38,6 +40,12 @@ def get_dashboard(db: Session, student: User, today: date | None = None) -> Dash
         MilestonePrerequisite.milestone_id, MilestonePrerequisite.requires_id
     )):
         prerequisites.setdefault(rule.milestone_id, []).append(rule)
+    # The exact time of each milestone's newest approval. Reading oldest to newest leaves the newest in place.
+    approved_times = {row.milestone_id: row.changed_at for row in db.scalars(
+        select(MilestoneStatusHistory).where(MilestoneStatusHistory.student_id == student.id,
+                                             MilestoneStatusHistory.status == MilestoneStatus.APPROVED.value)
+        .order_by(MilestoneStatusHistory.id)
+    )}
 
     results = []
     for milestone in milestones:
@@ -91,6 +99,8 @@ def get_dashboard(db: Session, student: User, today: date | None = None) -> Dash
         results.append(MilestoneOut(
             id=milestone.id, name=milestone.name, status=status, category=category,
             completed_on=record.completed_on if record else None,
+            # Older approvals have no recorded time, so this stays empty for them.
+            approved_at=approved_times.get(milestone.id) if approved else None,
             deadline_semester=deadline,
             deadline_label=semester_label(start + deadline - 1) if start is not None and deadline is not None else None,
             overdue=not approved and deadline is not None and current_semester is not None and current_semester > deadline,

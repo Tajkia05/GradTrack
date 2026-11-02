@@ -26,6 +26,8 @@ from app.modules.faculty.models import FacultyProfile
 from app.modules.milestones.models import Milestone, MilestoneStatus, StudentMilestone
 # The notifications table.
 from app.modules.notifications.models import Notification
+# Records a status change with its exact time, and tells the student.
+from app.modules.submissions.history import record_status_change
 # Role finds faculty accounts, and User is the logged-in student.
 from app.modules.users.models import Role, User
 
@@ -130,6 +132,8 @@ def sync_committee_milestone(db: Session, student: User) -> None:
         progress.status = MilestoneStatus.APPROVED
         # Record today's date as the approval date, in New York time like the rest of the app.
         progress.completed_on = datetime.now(ZoneInfo("America/New_York")).date()
+        # Record the exact time, and tell the student.
+        record_status_change(db, student.id, milestone.id, MilestoneStatus.APPROVED, student.id)
     # Otherwise, the student has started but isn't finished.
     else:
         # Mark it as in progress.
@@ -199,6 +203,8 @@ def _reopen_if_incomplete(db: Session, student: User) -> None:
         progress.status = MilestoneStatus.IN_PROGRESS
         # Clear the approval date.
         progress.completed_on = None
+        # Record the change, and tell the student.
+        record_status_change(db, student.id, progress.milestone_id, MilestoneStatus.IN_PROGRESS, student.id)
 
 
 # Removes anyone on the committee except the chair, who has no row and so can't be reached here.

@@ -25,6 +25,8 @@ from app.modules.coursework.models import Course, StudentCourse
 from app.modules.coursework.schemas import CourseOut, CourseworkOut, RequirementProgress, StudentCourseIn, StudentCourseOut
 # The milestone tables, used to mark Coursework as in progress.
 from app.modules.milestones.models import Milestone, MilestoneStatus, StudentMilestone
+# Records a status change with its exact time, and tells the student.
+from app.modules.submissions.history import record_status_change
 # The dashboard's semester functions, so deadlines are worked out the same way everywhere.
 from app.modules.student.service import semester_index, semester_label
 # EnrollmentStatus doubles deadlines for part-time students, Term sorts courses by date, and User is the logged-in student.
@@ -360,20 +362,30 @@ def _update_milestone(db: Session, student: User) -> None:
     result = calculate_progress(_load_rows(db, student))
     # The bulletin requires a B+ core and breadth average. None means those courses have no letter grades to average.
     average_ok = result["core_breadth_average"] is None or result["core_breadth_average_met"]
+    # Remember whether it was already approved, so only a real change is recorded.
+    was_approved = progress.status == MilestoneStatus.APPROVED
     # Check for all 45 credits and the required average.
     if result["coursework_credits"] >= COURSEWORK_CREDITS and average_ok:
         # Record today's date the first time it's approved, keeping any earlier date.
-        if progress.status != MilestoneStatus.APPROVED or progress.completed_on is None:
+        if not was_approved or progress.completed_on is None:
             # Use today's date as the approval date.
             progress.completed_on = _today()
         # Mark the milestone as approved.
         progress.status = MilestoneStatus.APPROVED
+        # A new approval goes in the history, and the student is told.
+        if not was_approved:
+            # Record it, with the student as the person whose change caused it.
+            record_status_change(db, student.id, milestone.id, MilestoneStatus.APPROVED, student.id)
     # Otherwise, including after a course is edited or deleted, it isn't complete.
     else:
         # Mark the milestone as in progress.
         progress.status = MilestoneStatus.IN_PROGRESS
         # Clear the approval date.
         progress.completed_on = None
+        # Losing an approval goes in the history, and the student is told.
+        if was_approved:
+            # Record it, with the student as the person whose change caused it.
+            record_status_change(db, student.id, milestone.id, MilestoneStatus.IN_PROGRESS, student.id)
 
 
 # Adds a course for the logged-in student.
