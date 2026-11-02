@@ -1,11 +1,11 @@
-"""Tests for the read-only Faculty Dashboard."""
+"""Tests for the Faculty Dashboard and milestone review workflow."""
 
 import unittest
 from datetime import date
 from decimal import Decimal
 
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session
 from sqlalchemy.pool import StaticPool
 
@@ -269,6 +269,109 @@ class FacultyDashboardTests(unittest.TestCase):
         self.assertEqual(
             response.status_code,
             401,
+        )
+
+    def test_faculty_can_approve_assigned_student_milestone(self):
+        response = self.client.patch(
+            "/api/faculty/students/4/milestones/2",
+            headers=self.headers(self.faculty),
+            json={"status": "approved"},
+        )
+
+        self.assertEqual(
+            response.status_code,
+            200,
+        )
+
+        self.assertEqual(
+            response.json()["status"],
+            "approved",
+        )
+
+        progress = self.db.scalar(
+            select(StudentMilestone).where(
+                StudentMilestone.student_id == 4,
+                StudentMilestone.milestone_id == 2,
+            )
+        )
+
+        self.assertEqual(
+            progress.status,
+            MilestoneStatus.APPROVED,
+        )
+
+        self.assertIsNotNone(
+            progress.completed_on,
+        )
+
+    def test_faculty_can_request_revision(self):
+        response = self.client.patch(
+            "/api/faculty/students/4/milestones/2",
+            headers=self.headers(self.faculty),
+            json={"status": "revision_requested"},
+        )
+
+        self.assertEqual(
+            response.status_code,
+            200,
+        )
+
+        self.assertEqual(
+            response.json()["status"],
+            "revision_requested",
+        )
+
+    def test_faculty_can_reject_milestone(self):
+        response = self.client.patch(
+            "/api/faculty/students/4/milestones/2",
+            headers=self.headers(self.faculty),
+            json={"status": "rejected"},
+        )
+
+        self.assertEqual(
+            response.status_code,
+            200,
+        )
+
+        self.assertEqual(
+            response.json()["status"],
+            "rejected",
+        )
+
+    def test_faculty_cannot_review_other_faculty_student(self):
+        response = self.client.patch(
+            "/api/faculty/students/5/milestones/1",
+            headers=self.headers(self.faculty),
+            json={"status": "approved"},
+        )
+
+        self.assertEqual(
+            response.status_code,
+            404,
+        )
+
+    def test_student_cannot_review_milestone(self):
+        response = self.client.patch(
+            "/api/faculty/students/4/milestones/2",
+            headers=self.headers(self.student),
+            json={"status": "approved"},
+        )
+
+        self.assertEqual(
+            response.status_code,
+            403,
+        )
+
+    def test_invalid_review_status_is_rejected(self):
+        response = self.client.patch(
+            "/api/faculty/students/4/milestones/2",
+            headers=self.headers(self.faculty),
+            json={"status": "in_progress"},
+        )
+
+        self.assertEqual(
+            response.status_code,
+            400,
         )
 
 

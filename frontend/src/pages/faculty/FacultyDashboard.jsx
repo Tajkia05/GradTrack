@@ -1,5 +1,5 @@
 // FacultyDashboard.jsx — THE FACULTY'S HOME PAGE. URL: /faculty
-// Sprint 1: read-only overview of assigned students and pending milestone reviews.
+// Sprint 2: faculty overview with milestone review actions.
 
 import { useEffect, useState } from "react";
 import { api } from "../../api/client.js";
@@ -31,6 +31,8 @@ export default function FacultyDashboard() {
   const [data, setData] = useState(null);
   const [error, setError] = useState("");
   const [attempt, setAttempt] = useState(0);
+  const [reviewing, setReviewing] = useState("");
+  const [reviewError, setReviewError] = useState("");
 
   useEffect(() => {
     const controller = new AbortController();
@@ -54,6 +56,32 @@ export default function FacultyDashboard() {
 
     return () => controller.abort();
   }, [attempt]);
+
+  async function handleReview(review, status) {
+    const reviewKey = `${review.student_id}-${review.milestone_id}`;
+
+    setReviewing(reviewKey);
+    setReviewError("");
+
+    try {
+      await api(
+        `/faculty/students/${review.student_id}/milestones/${review.milestone_id}`,
+        {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ status }),
+        }
+      );
+
+      setAttempt((value) => value + 1);
+    } catch (err) {
+      setReviewError(err.message);
+    } finally {
+      setReviewing("");
+    }
+  }
 
   if (error) {
     return (
@@ -155,38 +183,96 @@ export default function FacultyDashboard() {
           </span>
         </div>
 
+        {reviewError && (
+          <p
+            role="alert"
+            className="mb-3 rounded-xl border border-red-400/30 bg-red-400/10 px-4 py-3 text-sm text-red-200"
+          >
+            {reviewError}
+          </p>
+        )}
+
         {pending_reviews.length > 0 ? (
           <div className="space-y-2">
-            {pending_reviews.map((review) => (
-              <div
-                key={`${review.student_id}-${review.milestone_id}`}
-                className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-line bg-panel p-4"
-              >
-                <div>
-                  <h3 className="font-display font-semibold text-white">
-                    {review.student_name}
-                  </h3>
+            {pending_reviews.map((review) => {
+              const reviewKey =
+                `${review.student_id}-${review.milestone_id}`;
 
-                  <p className="mt-1 text-sm text-mist/65">
-                    {review.milestone_name}
-                  </p>
+              const isReviewing = reviewing === reviewKey;
+
+              return (
+                <div
+                  key={reviewKey}
+                  className="rounded-xl border border-line bg-panel p-4"
+                >
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <h3 className="font-display font-semibold text-white">
+                        {review.student_name}
+                      </h3>
+
+                      <p className="mt-1 text-sm text-mist/65">
+                        {review.milestone_name}
+                      </p>
+                    </div>
+
+                    <span className="rounded-full border border-sage/25 bg-sage/10 px-3 py-1 text-xs text-sage">
+                      {STATUS_LABELS[review.status] || review.status}
+                    </span>
+                  </div>
+
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      disabled={isReviewing}
+                      onClick={() =>
+                        handleReview(review, "approved")
+                      }
+                      className="rounded-lg bg-sage px-3 py-2 text-sm font-semibold text-ink hover:bg-sage-light disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      Approve
+                    </button>
+
+                    <button
+                      type="button"
+                      disabled={isReviewing}
+                      onClick={() =>
+                        handleReview(
+                          review,
+                          "revision_requested"
+                        )
+                      }
+                      className="rounded-lg border border-line px-3 py-2 text-sm font-semibold text-mist hover:border-sage/40 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      Request revision
+                    </button>
+
+                    <button
+                      type="button"
+                      disabled={isReviewing}
+                      onClick={() =>
+                        handleReview(review, "rejected")
+                      }
+                      className="rounded-lg border border-red-400/30 px-3 py-2 text-sm font-semibold text-red-300 hover:bg-red-400/10 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      Reject
+                    </button>
+                  </div>
+
+                  {isReviewing && (
+                    <p className="mt-2 text-xs text-mist/50">
+                      Updating milestone…
+                    </p>
+                  )}
                 </div>
-
-                <span className="rounded-full border border-sage/25 bg-sage/10 px-3 py-1 text-xs text-sage">
-                  {STATUS_LABELS[review.status] || review.status}
-                </span>
-              </div>
-            ))}
+              );
+            })}
           </div>
         ) : (
           <p className="rounded-xl border border-dashed border-line px-5 py-4 text-sm text-mist/50">
             No milestone submissions are waiting for review.
           </p>
         )}
-
-        <p className="mt-2 text-xs text-mist/45">
-          Approval, rejection, and revision actions will be added in the milestone review workflow.
-        </p>
       </section>
 
       <section aria-labelledby="students-title">
