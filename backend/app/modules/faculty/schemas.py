@@ -37,3 +37,7 @@ class FacultyDashboardOut(BaseModel):
     summary: FacultySummary
     students: list[AssignedStudentOut]
     pending_reviews: list[PendingReviewOut]
+
+
+class MilestoneReviewRequest(BaseModel):
+    status: MilestoneStatus

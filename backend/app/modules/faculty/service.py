@@ -148,3 +148,46 @@ def get_faculty_dashboard(
         students=student_outputs,
         pending_reviews=pending_reviews,
     )
+
+def review_student_milestone(
+    db: Session,
+    faculty: User,
+    student_id: int,
+    milestone_id: int,
+    new_status: MilestoneStatus,
+) -> StudentMilestone | None:
+    # Faculty can only review milestones for students assigned to them.
+    student = db.scalar(
+        select(User).where(
+            User.id == student_id,
+            User.role == Role.STUDENT,
+            User.advisor_id == faculty.id,
+        )
+    )
+
+    if student is None:
+        return None
+
+    progress = db.scalar(
+        select(StudentMilestone).where(
+            StudentMilestone.student_id == student_id,
+            StudentMilestone.milestone_id == milestone_id,
+        )
+    )
+
+    if progress is None or progress.status not in REVIEW_STATUSES:
+        return None
+
+    progress.status = new_status
+
+    if new_status == MilestoneStatus.APPROVED:
+        progress.completed_on = datetime.now(
+            ZoneInfo("America/New_York")
+        ).date()
+    else:
+        progress.completed_on = None
+
+    db.commit()
+    db.refresh(progress)
+
+    return progress
