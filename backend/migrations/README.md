@@ -144,6 +144,14 @@ Valid values are `pending`, `approved` and `declined`.
 3. Show their notifications from `GET /api/notifications/me`. Marking one as read isn't
    built yet.
 
+# Candidacy
+
+Apply `010_add_candidacy_proposal_rule.sql` in the Neon SQL editor. It adds the rule that
+Candidacy needs an approved Dissertation proposal. Candidacy completes automatically when
+Coursework is completed, the comprehensive exam and proposal are approved, and the GPA is
+at least 3.0, the next time the student opens their dashboard. If a condition stops being
+met, it goes back to In progress. Continuous registration isn't tracked.
+
 # Student profile
 
 Apply `007_create_student_profiles.sql` in the Neon SQL editor. It adds the
@@ -195,7 +203,7 @@ advisor can record a decision before the presentation until scheduling is built.
 ## Completed or Approved
 
 Students see "Completed" for milestones the app finishes by itself (Coursework, Advisor
-declaration and Committee formation), and "Approved" when a person decides. In the
+declaration, Committee formation and Candidacy), and "Approved" when a person decides. In the
 database, all of them still use the `approved` status. The list is `AUTOMATIC_MILESTONES`
 in `app/modules/milestones/models.py`.
 

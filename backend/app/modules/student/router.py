@@ -7,6 +7,8 @@ from app.core.database import get_db
 from app.core.deps import require_role
 # Updates Committee formation from the committee's members.
 from app.modules.committee.service import sync_committee_milestone
+# Completes Candidacy when its conditions are met.
+from app.modules.student.candidacy import sync_candidacy_milestone
 from app.modules.student.schemas import AdvisorDeclaration, AdvisorDeclarationDetails, AdvisorOut, DashboardOut
 from app.modules.student.advisor_service import declare_advisor, get_declaration_details, list_advisors
 from app.modules.student.service import get_dashboard
@@ -22,6 +24,8 @@ def my_milestones(
 ):
     # Update Committee formation first, so an approval saved by the faculty side or by hand shows here.
     sync_committee_milestone(db, student)
+    # Then update Candidacy, whose conditions may have just been met.
+    sync_candidacy_milestone(db, student)
     return get_dashboard(db, student)
 
 

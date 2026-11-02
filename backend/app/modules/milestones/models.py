@@ -29,7 +29,7 @@ class MilestoneStatus(str, enum.Enum):
 
 
 # Milestones the app completes by itself, with no one reviewing them. Their database status is still "approved".
-AUTOMATIC_MILESTONES = {"coursework", "advisor declaration", "committee formation"}
+AUTOMATIC_MILESTONES = {"coursework", "advisor declaration", "committee formation", "candidacy"}
 
 
 # True if the app completes this milestone by itself.

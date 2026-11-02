@@ -152,22 +152,19 @@ export default function StudentDashboard() {
 
   return (
     <div className="space-y-7">
-      <header className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <p className="text-xs font-medium uppercase tracking-[0.18em] text-sage">Your degree, one step at a time</p>
-          <h1 className="mt-2 font-display text-3xl font-bold text-white">My progress</h1>
-          <p className="mt-3 font-display text-xl font-medium text-mist sm:text-2xl">Welcome back, <span className="font-semibold text-white">{student.full_name}</span>.</p>
-          {student.advisor_name && (
-            <div className="mt-4 rounded-xl border border-sage/25 bg-sage/5 px-4 py-3">
-              <p className="text-xs font-medium uppercase tracking-wider text-sage">Your advisor</p>
-              <p className="mt-1 font-display text-lg font-semibold text-white sm:text-xl">{student.advisor_name}</p>
-            </div>
-          )}
+      {/* The greeting, with the student's key details in one small row underneath. */}
+      <header>
+        {/* The page's main heading. */}
+        <h1 className="font-display text-3xl font-bold text-white">Welcome back, {student.full_name}</h1>
+        {/* The details row, which wraps on narrow screens. */}
+        <div className="mt-3 flex flex-wrap items-center gap-2 text-sm">
+          {/* The advisor, only once one is declared. */}
+          {student.advisor_name && <span className="rounded-full border border-sage/25 bg-sage/5 px-3 py-1 text-mist">Advisor: <span className="font-medium text-white">{student.advisor_name}</span></span>}
+          {/* Full-time or part-time. */}
+          <span className="rounded-full border border-line px-3 py-1 text-mist/70">{student.enrollment_status === "part_time" ? "Part-time" : student.enrollment_status === "full_time" ? "Full-time" : "Enrollment not set"}</span>
+          {/* Advanced standing, only for students who have it. */}
+          {student.advanced_standing && <span className="rounded-full border border-line px-3 py-1 text-mist/70">Advanced standing</span>}
         </div>
-        <span className="rounded-full border border-line px-3 py-1.5 text-xs text-mist/70">
-          {student.enrollment_status === "part_time" ? "Part-time" : student.enrollment_status === "full_time" ? "Full-time" : "Enrollment not set"}
-          {student.advanced_standing && " · Advanced standing"}
-        </span>
       </header>
 
       <section aria-labelledby="progress-title" className="rounded-2xl border border-sage/25 bg-panel p-5 sm:p-6">

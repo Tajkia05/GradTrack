@@ -92,6 +92,7 @@ PREREQUISITES = [
     ("Dissertation proposal", "Committee formation", 0),
     ("Dissertation proposal", "Comprehensive exam", 0),
     ("Candidacy", "Coursework", 0),
+    ("Candidacy", "Dissertation proposal", 0),
     ("Candidacy", "Comprehensive exam", 0),
     ("Dissertation defense", "Coursework", 0),
     ("Dissertation defense", "Dissertation proposal", 1),  # at least 1 semester before
