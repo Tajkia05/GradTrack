@@ -7,8 +7,8 @@ from datetime import datetime
 from fastapi import APIRouter, Depends
 # BaseModel describes the data, and ConfigDict sets options.
 from pydantic import BaseModel, ConfigDict
-# select builds database queries.
-from sqlalchemy import select
+# select builds database queries, and update changes many rows at once.
+from sqlalchemy import select, update
 # Session is one conversation with the database.
 from sqlalchemy.orm import Session
 
@@ -54,3 +54,19 @@ def my_notifications(
     return list(db.scalars(select(Notification).where(Notification.user_id == user.id)
                            # Show the newest first.
                            .order_by(Notification.id.desc())))
+
+
+# POST /api/notifications/me/read — mark all of the logged-in user's notifications as read.
+@router.post("/notifications/me/read", status_code=204)
+# This function runs when that URL is requested.
+def mark_my_notifications_read(
+    # Any logged-in user can use this, and the user comes from their login token.
+    user: User = Depends(get_current_user),
+    # Open a database session for this request.
+    db: Session = Depends(get_db),
+# End of the inputs.
+):
+    # Mark only this user's unread notifications.
+    db.execute(update(Notification).where(Notification.user_id == user.id, Notification.is_read.is_(False)).values(is_read=True))
+    # Save the change.
+    db.commit()

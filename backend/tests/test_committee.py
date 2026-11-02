@@ -219,6 +219,8 @@ class CommitteeTests(unittest.TestCase):
         self.assertEqual(self.milestone().status, MilestoneStatus.APPROVED)
         # The approval date is recorded.
         self.assertIsNotNone(self.milestone().completed_on)
+        # The student is told, with the date and time.
+        self.assertIn("Committee formation was completed on",self.db.scalars(select(Notification).where(Notification.user_id == self.lisa.id)).all()[-1].message)
 
     # Four members aren't enough with fewer than three from CS.
     def test_four_members_with_two_cs_is_not_complete(self):

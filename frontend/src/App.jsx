@@ -10,6 +10,8 @@ import Layout from "./components/Layout.jsx";
 import Login from "./pages/Login.jsx";
 import Register from "./pages/Register.jsx";
 import StudentDashboard from "./pages/student/StudentDashboard.jsx";
+// The page where a student views and edits their profile.
+import StudentProfile from "./pages/student/StudentProfile.jsx";
 import FacultyDashboard from "./pages/faculty/FacultyDashboard.jsx";
 import DirectorDashboard from "./pages/director/DirectorDashboard.jsx";
 
@@ -30,6 +32,8 @@ export default function App() {
           {/* Student-only pages */}
           <Route element={<ProtectedRoute role="student" />}>
             <Route path="/student" element={<StudentDashboard />} />
+            {/* When the URL is /student/profile, show the student's profile. */}
+            <Route path="/student/profile" element={<StudentProfile />} />
           </Route>
 
           {/* Faculty-only pages */}

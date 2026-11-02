@@ -6,8 +6,10 @@ from zoneinfo import ZoneInfo
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.modules.milestones.models import Milestone, MilestonePrerequisite, MilestoneStatus, StudentMilestone
+from app.modules.milestones.models import Milestone, MilestonePrerequisite, MilestoneStatus, StudentMilestone, finished_word, is_automatic
 from app.modules.student.schemas import DashboardOut, MilestoneOut, ProgressSummary, RequirementOut, StudentProfile
+# The status history holds the exact time of each approval.
+from app.modules.submissions.models import MilestoneStatusHistory
 from app.modules.users.models import EnrollmentStatus, Term, User
 
 
@@ -38,6 +40,12 @@ def get_dashboard(db: Session, student: User, today: date | None = None) -> Dash
         MilestonePrerequisite.milestone_id, MilestonePrerequisite.requires_id
     )):
         prerequisites.setdefault(rule.milestone_id, []).append(rule)
+    # The exact time of each milestone's newest approval. Reading oldest to newest leaves the newest in place.
+    approved_times = {row.milestone_id: row.changed_at for row in db.scalars(
+        select(MilestoneStatusHistory).where(MilestoneStatusHistory.student_id == student.id,
+                                             MilestoneStatusHistory.status == MilestoneStatus.APPROVED.value)
+        .order_by(MilestoneStatusHistory.id)
+    )}
 
     results = []
     for milestone in milestones:
@@ -49,17 +57,21 @@ def get_dashboard(db: Session, student: User, today: date | None = None) -> Dash
             required = by_id[rule.requires_id]
             previous = progress.get(rule.requires_id)
             met = previous is not None and previous.status == MilestoneStatus.APPROVED
-            explanation = f"{required.name} must be approved."
+            # "completed" for automatic milestones, and "approved" when a person decides.
+            word = finished_word(required.name)
+            # The same idea as a noun, for the messages about dates.
+            noun = "completion" if word == "completed" else "approval"
+            explanation = f"{required.name} must be {word}."
             if met and rule.min_gap_semesters:
                 if previous.completed_on is None:
                     met = False
-                    explanation = f"{required.name}: approval date is needed to verify the semester gap."
+                    explanation = f"{required.name}: {noun} date is needed to verify the semester gap."
                 else:
                     earliest = semester_index(previous.completed_on) + rule.min_gap_semesters
                     met = now >= earliest
-                    explanation = f"{required.name}: wait at least {rule.min_gap_semesters} semester(s) after approval (eligible {semester_label(earliest)})."
+                    explanation = f"{required.name}: wait at least {rule.min_gap_semesters} semester(s) after {noun} (eligible {semester_label(earliest)})."
             elif met:
-                explanation = f"{required.name} is approved."
+                explanation = f"{required.name} is {word}."
             requirements.append(RequirementOut(name=required.name, met=met, explanation=explanation))
 
         if milestone.name.casefold() == "comprehensive exam":
@@ -90,7 +102,11 @@ def get_dashboard(db: Session, student: User, today: date | None = None) -> Dash
                     else "upcoming" if status == MilestoneStatus.NOT_STARTED else "current")
         results.append(MilestoneOut(
             id=milestone.id, name=milestone.name, status=status, category=category,
+            # Tells the page whether to say "Completed" or "Approved".
+            is_automatic=is_automatic(milestone.name),
             completed_on=record.completed_on if record else None,
+            # Older approvals have no recorded time, so this stays empty for them.
+            approved_at=approved_times.get(milestone.id) if approved else None,
             deadline_semester=deadline,
             deadline_label=semester_label(start + deadline - 1) if start is not None and deadline is not None else None,
             overdue=not approved and deadline is not None and current_semester is not None and current_semester > deadline,

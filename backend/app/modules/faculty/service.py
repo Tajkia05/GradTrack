@@ -21,6 +21,8 @@ from app.modules.milestones.models import (
     StudentMilestone,
 )
 from app.modules.student.service import semester_index
+# Records a status change with its exact time, and tells the student.
+from app.modules.submissions.history import record_status_change
 from app.modules.users.models import Role, Term, User
 
 
@@ -189,6 +191,9 @@ def review_student_milestone(
         ).date()
     else:
         progress.completed_on = None
+
+    # Record who decided and when, and tell the student.
+    record_status_change(db, student_id, milestone_id, new_status, faculty.id)
 
     db.commit()
     db.refresh(progress)

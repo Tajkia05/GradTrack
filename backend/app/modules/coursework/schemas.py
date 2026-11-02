@@ -106,6 +106,8 @@ class StudentCourseOut(BaseModel):
     year: int
     # The grade. Empty = still in progress.
     grade: str | None
+    # Why this course counts differently than expected. Empty when it counts as normal.
+    note: str | None
 
 
 # The progress for one requirement group, shown as one progress bar.

@@ -17,6 +17,11 @@
   --color-sage-light: #b5d6b2;  /* button hover */
 }
 
+/* Tailwind gives buttons the normal arrow cursor, so show a hand on every button that can be clicked. */
+@layer base {
+  button:not(:disabled) { cursor: pointer; }
+}
+
 /* ---------- Lamp sign-in screen (used by components/AuthShell.jsx) ---------- */
 /* Everything below starts switched OFF, and turns on when the page has the "is-lit" class. */
 

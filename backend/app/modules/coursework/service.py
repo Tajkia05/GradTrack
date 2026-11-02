@@ -25,6 +25,8 @@ from app.modules.coursework.models import Course, StudentCourse
 from app.modules.coursework.schemas import CourseOut, CourseworkOut, RequirementProgress, StudentCourseIn, StudentCourseOut
 # The milestone tables, used to mark Coursework as in progress.
 from app.modules.milestones.models import Milestone, MilestoneStatus, StudentMilestone
+# Records a status change with its exact time, and tells the student.
+from app.modules.submissions.history import record_status_change
 # The dashboard's semester functions, so deadlines are worked out the same way everywhere.
 from app.modules.student.service import semester_index, semester_label
 # EnrollmentStatus doubles deadlines for part-time students, Term sorts courses by date, and User is the logged-in student.
@@ -210,6 +212,69 @@ def _load_rows(db: Session, student: User):
     return rows
 
 
+# Explains each course that counts differently than a student might expect, as {row id: note}.
+# It follows the same order and rules as calculate_progress, so the notes match the credits.
+def course_notes(rows) -> dict:
+    # The notes so far.
+    notes = {}
+    # The rows that count toward the degree, in date order.
+    counted = _counted_rows(rows)
+    # Their ids, so the rows left out can be found.
+    counted_ids = {row.id for row, _ in counted}
+    # Go through the rows left out.
+    for row, course in rows:
+        # A course in progress has no grade yet, so there's nothing to explain.
+        if row.grade is None or row.id in counted_ids:
+            # Move on to the next row.
+            continue
+        # Explain why this one was left out.
+        notes[row.id] = ("Earns no graduate credit, because the grade is below C." if row.grade not in CREDIT_GRADES
+                         # The only other reason is a repeat of a course that can't be repeated for credit.
+                         else f"Not counted, because another attempt at {course.code} has a higher grade.")
+    # The breadth areas filled so far.
+    filled = set()
+    # The independent study or research credits so far.
+    research_credits = 0
+    # Go through the counted rows in the same order as the calculation.
+    for row, course in counted:
+        # True if this grade is high enough for core and breadth.
+        high_enough = row.grade in B_OR_BETTER
+        # A core course below a B counts as an elective instead.
+        if course.area == "core" and not high_enough:
+            # Explain the rule.
+            notes[row.id] = "Doesn't count toward Core, which needs a B or better. Counted as an elective."
+        # Handle a course from a breadth area.
+        elif course.area in BREADTH_AREAS:
+            # The area's name, for the messages.
+            area_name = BREADTH_AREAS[course.area]
+            # A grade below a B can't fill an area.
+            if not high_enough:
+                # Explain the rule.
+                notes[row.id] = f"Doesn't count toward {area_name}, which needs a B or better. Counted as an elective."
+            # An earlier course already filled this area.
+            elif course.area in filled:
+                # Explain where it went.
+                notes[row.id] = f"{area_name} is already filled, so this counts as an elective."
+            # This course fills the area.
+            else:
+                # Remember the area is filled.
+                filled.add(course.area)
+                # Only CSI 518 has more credits than the area needs.
+                if row.credits > BREADTH_AREA_CREDITS:
+                    # Explain the split.
+                    notes[row.id] = f"{BREADTH_AREA_CREDITS} credits count toward {area_name}, and the other {row.credits - BREADTH_AREA_CREDITS} toward electives."
+        # Handle an independent study or research course. CSI 898 has its own group, so it's left out here.
+        elif course.is_research and course.area != "dissertation":
+            # Add its credits to the total.
+            research_credits += row.credits
+            # Explain if this course goes past the limit.
+            if research_credits > MAX_RESEARCH_CREDITS:
+                # State the rule.
+                notes[row.id] = f"Only {MAX_RESEARCH_CREDITS} credits of independent study or research can count, so some or all of this course doesn't."
+    # Return the notes.
+    return notes
+
+
 # Works out the CSI 790 deadline, and whether it's done or overdue, the same way as the dashboard's other deadlines.
 def _csi_790_status(student: User, rows):
     # CSI 790 is done once it has a B or better, the same as any core course.
@@ -241,6 +306,8 @@ def get_coursework(db: Session, student: User) -> CourseworkOut:
     courses = list(db.scalars(select(Course).order_by(Course.code)))
     # Load this student's rows, each with its course.
     rows = _load_rows(db, student)
+    # Explain any course that counts differently than expected.
+    notes = course_notes(rows)
     # Combine the course list, the student's courses and the calculated progress.
     return CourseworkOut(
         # Convert each course for the dropdown.
@@ -250,7 +317,7 @@ def get_coursework(db: Session, student: User) -> CourseworkOut:
                                      min_credits=course.min_credits, max_credits=course.max_credits,
                                      is_manual=row.course_id is None, department=row.manual_department,
                                      is_research=row.manual_is_research,
-                                     credits=row.credits, term=row.term, year=row.year, grade=row.grade)
+                                     credits=row.credits, term=row.term, year=row.year, grade=row.grade, note=notes.get(row.id))
                     for row, course in rows],
         # Add the calculated values.
         **calculate_progress(rows),
@@ -360,20 +427,30 @@ def _update_milestone(db: Session, student: User) -> None:
     result = calculate_progress(_load_rows(db, student))
     # The bulletin requires a B+ core and breadth average. None means those courses have no letter grades to average.
     average_ok = result["core_breadth_average"] is None or result["core_breadth_average_met"]
+    # Remember whether it was already approved, so only a real change is recorded.
+    was_approved = progress.status == MilestoneStatus.APPROVED
     # Check for all 45 credits and the required average.
     if result["coursework_credits"] >= COURSEWORK_CREDITS and average_ok:
         # Record today's date the first time it's approved, keeping any earlier date.
-        if progress.status != MilestoneStatus.APPROVED or progress.completed_on is None:
+        if not was_approved or progress.completed_on is None:
             # Use today's date as the approval date.
             progress.completed_on = _today()
         # Mark the milestone as approved.
         progress.status = MilestoneStatus.APPROVED
+        # A new approval goes in the history, and the student is told.
+        if not was_approved:
+            # Record it, with the student as the person whose change caused it.
+            record_status_change(db, student.id, milestone.id, MilestoneStatus.APPROVED, student.id)
     # Otherwise, including after a course is edited or deleted, it isn't complete.
     else:
         # Mark the milestone as in progress.
         progress.status = MilestoneStatus.IN_PROGRESS
         # Clear the approval date.
         progress.completed_on = None
+        # Losing an approval goes in the history, and the student is told.
+        if was_approved:
+            # Record it, with the student as the person whose change caused it.
+            record_status_change(db, student.id, milestone.id, MilestoneStatus.IN_PROGRESS, student.id)
 
 
 # Adds a course for the logged-in student.
