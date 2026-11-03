@@ -1,4 +1,4 @@
-"""Faculty dashboard, milestone review, and committee invitation API."""
+"""Faculty dashboard, profile, student progress, and review API."""
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
@@ -10,15 +10,21 @@ from app.modules.faculty.schemas import (
     CommitteeInvitationResponse,
     CommitteeMembershipOut,
     FacultyDashboardOut,
+    FacultyProfileOut,
+    FacultyProfileUpdate,
+    FacultyStudentProgressOut,
     MilestoneReviewRequest,
 )
 from app.modules.faculty.service import (
     get_committee_memberships,
     get_faculty_dashboard,
+    get_faculty_profile,
     get_pending_committee_invitations,
+    get_student_progress_for_faculty,
     leave_committee,
     respond_to_committee_invitation,
     review_student_milestone,
+    save_faculty_profile,
 )
 from app.modules.milestones.models import MilestoneStatus
 from app.modules.users.models import Role, User
@@ -35,7 +41,71 @@ def my_dashboard(
     faculty: User = Depends(require_role(Role.FACULTY)),
     db: Session = Depends(get_db),
 ):
-    return get_faculty_dashboard(db, faculty)
+    """Return the logged-in faculty member's dashboard."""
+    return get_faculty_dashboard(
+        db,
+        faculty,
+    )
+
+
+@router.get(
+    "/faculty/me/profile",
+    response_model=FacultyProfileOut,
+)
+def my_profile(
+    faculty: User = Depends(require_role(Role.FACULTY)),
+    db: Session = Depends(get_db),
+):
+    """Return the logged-in faculty member's profile."""
+    return get_faculty_profile(
+        db,
+        faculty,
+    )
+
+
+@router.put(
+    "/faculty/me/profile",
+    response_model=FacultyProfileOut,
+)
+def update_my_profile(
+    body: FacultyProfileUpdate,
+    faculty: User = Depends(require_role(Role.FACULTY)),
+    db: Session = Depends(get_db),
+):
+    """Create or update the logged-in faculty member's profile."""
+    return save_faculty_profile(
+        db,
+        faculty,
+        body,
+    )
+
+
+@router.get(
+    "/faculty/students/{student_id}/progress",
+    response_model=FacultyStudentProgressOut,
+)
+def student_progress(
+    student_id: int,
+    faculty: User = Depends(require_role(Role.FACULTY)),
+    db: Session = Depends(get_db),
+):
+    """Return detailed progress for one assigned student."""
+    progress = get_student_progress_for_faculty(
+        db,
+        faculty,
+        student_id,
+    )
+
+    if progress is None:
+        raise HTTPException(
+            status_code=404,
+            detail=(
+                "Student not found or not assigned "
+                "to this faculty member."
+            ),
+        )
+
+    return progress
 
 
 @router.patch(
@@ -48,6 +118,7 @@ def review_milestone(
     faculty: User = Depends(require_role(Role.FACULTY)),
     db: Session = Depends(get_db),
 ):
+    """Approve, reject, or request revision for a milestone."""
     allowed_statuses = {
         MilestoneStatus.APPROVED,
         MilestoneStatus.REVISION_REQUESTED,
@@ -94,6 +165,7 @@ def my_committee_invitations(
     faculty: User = Depends(require_role(Role.FACULTY)),
     db: Session = Depends(get_db),
 ):
+    """Return pending dissertation committee invitations."""
     return get_pending_committee_invitations(
         db,
         faculty,
@@ -109,6 +181,7 @@ def respond_to_invitation(
     faculty: User = Depends(require_role(Role.FACULTY)),
     db: Session = Depends(get_db),
 ):
+    """Approve or decline a committee invitation."""
     if body.status not in {"approved", "declined"}:
         raise HTTPException(
             status_code=400,
@@ -149,6 +222,7 @@ def my_committee_memberships(
     faculty: User = Depends(require_role(Role.FACULTY)),
     db: Session = Depends(get_db),
 ):
+    """Return approved committee memberships."""
     return get_committee_memberships(
         db,
         faculty,
@@ -163,6 +237,7 @@ def leave_committee_membership(
     faculty: User = Depends(require_role(Role.FACULTY)),
     db: Session = Depends(get_db),
 ):
+    """Leave an approved dissertation committee."""
     removed = leave_committee(
         db,
         faculty,

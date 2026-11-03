@@ -1,11 +1,10 @@
 // FacultyDashboard.jsx — THE FACULTY'S HOME PAGE. URL: /faculty
-// Sprint 2: faculty overview with milestone reviews and committee management.
+// Sprint 2: faculty overview with milestone reviews, committee management,
+// and detailed advisee progress.
 
 import { useEffect, useRef, useState } from "react";
-// useLocation reads which item a notification opened.
-import { useLocation } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import { api, getToken } from "../../api/client.js";
-// The app's own "are you sure?" box.
 import ConfirmDialog from "../../components/ConfirmDialog.jsx";
 
 
@@ -54,50 +53,86 @@ export default function FacultyDashboard() {
   const [membershipError, setMembershipError] = useState("");
   const [leavingMembership, setLeavingMembership] =
     useState(null);
-  // The committee waiting to be confirmed for leaving. Empty when the box isn't showing.
+
+  // The committee waiting to be confirmed for leaving.
   const [membershipToLeave, setMembershipToLeave] =
     useState(null);
 
   // The address bar, which holds the item a notification opened.
   const location = useLocation();
-  // The last notification click that's been dealt with, so a reload doesn't scroll again.
+
+  // The last notification click that has been handled.
   const handledClick = useRef(null);
+
   // The review or section to highlight for a moment.
-  const [highlightedId, setHighlightedId] = useState(null);
+  const [highlightedId, setHighlightedId] =
+    useState(null);
 
-  // When a notification opens this page: scroll to its item and highlight it.
+
+  // When a notification opens this page, scroll to its item
+  // and highlight it.
   useEffect(() => {
-    // Wait until the page has loaded, and only handle each click once.
-    if (!data || handledClick.current === location.key) return;
-    // Read the link's details.
-    const params = new URLSearchParams(location.search);
-    // A link to one review, if there is one.
+    if (
+      !data ||
+      handledClick.current === location.key
+    ) {
+      return;
+    }
+
+    const params = new URLSearchParams(
+      location.search
+    );
+
     const student = params.get("student");
-    // The review's milestone.
     const milestone = params.get("milestone");
-    // A link to a whole section, if there is one.
     const section = params.get("section");
-    // Stop if this isn't a notification link.
-    if (!section && !student) return;
-    // Mark this click as dealt with.
+
+    if (!section && !student) {
+      return;
+    }
+
     handledClick.current = location.key;
-    // Choose the review if it's still on the list. Otherwise, it's been decided, so use the review section.
-    const reviewId = student ? `review-${student}-${milestone}` : null;
-    // Choose what to scroll to.
-    const targetId = reviewId && document.getElementById(reviewId) ? reviewId : `section-${section || "reviews"}`;
-    // Scroll to it.
-    document.getElementById(targetId)?.scrollIntoView({ behavior: "smooth", block: "center" });
-    // Highlight it.
+
+    const reviewId = student
+      ? `review-${student}-${milestone}`
+      : null;
+
+    const targetId =
+      reviewId &&
+      document.getElementById(reviewId)
+        ? reviewId
+        : `section-${section || "reviews"}`;
+
+    document
+      .getElementById(targetId)
+      ?.scrollIntoView({
+        behavior: "smooth",
+        block: "center",
+      });
+
     setHighlightedId(targetId);
-    // Turn the highlight off after a few seconds. This timer is left running if the page's data reloads.
-    setTimeout(() => setHighlightedId(null), 3000);
-  // Run this when the page loads, and for each new click.
-  }, [data, location.key, location.search]);
 
-  // The highlight's styling, for the item a notification opened.
-  const highlightClass = (id) => (highlightedId === id ? "rounded-xl ring-2 ring-sage" : "");
+    const timer = setTimeout(
+      () => setHighlightedId(null),
+      3000
+    );
+
+    return () => clearTimeout(timer);
+  }, [
+    data,
+    location.key,
+    location.search,
+  ]);
 
 
+  const highlightClass = (id) =>
+    highlightedId === id
+      ? "rounded-xl ring-2 ring-sage"
+      : "";
+
+
+  // Load the faculty dashboard, committee invitations,
+  // and committee memberships together.
   useEffect(() => {
     const controller = new AbortController();
 
@@ -110,12 +145,18 @@ export default function FacultyDashboard() {
       api("/faculty/me/dashboard", {
         signal: controller.signal,
       }),
-      api("/faculty/me/committee-invitations", {
-        signal: controller.signal,
-      }),
-      api("/faculty/me/committee-memberships", {
-        signal: controller.signal,
-      }),
+      api(
+        "/faculty/me/committee-invitations",
+        {
+          signal: controller.signal,
+        }
+      ),
+      api(
+        "/faculty/me/committee-memberships",
+        {
+          signal: controller.signal,
+        }
+      ),
     ])
       .then(
         ([
@@ -125,8 +166,12 @@ export default function FacultyDashboard() {
         ]) => {
           if (!controller.signal.aborted) {
             setData(dashboard);
-            setInvitations(committeeInvitations);
-            setMemberships(committeeMemberships);
+            setInvitations(
+              committeeInvitations
+            );
+            setMemberships(
+              committeeMemberships
+            );
           }
         }
       )
@@ -140,6 +185,7 @@ export default function FacultyDashboard() {
   }, [attempt]);
 
 
+  // Load submission attempts and files for every pending review.
   useEffect(() => {
     if (!data?.pending_reviews) {
       return;
@@ -152,30 +198,43 @@ export default function FacultyDashboard() {
       const loadedErrors = {};
 
       await Promise.all(
-        data.pending_reviews.map(async (review) => {
-          const reviewKey =
-            `${review.student_id}-${review.milestone_id}`;
+        data.pending_reviews.map(
+          async (review) => {
+            const reviewKey =
+              `${review.student_id}-${review.milestone_id}`;
 
-          try {
-            const attempts = await api(
-              `/faculty/students/${review.student_id}/milestones/${review.milestone_id}/submissions`,
-              {
-                signal: controller.signal,
+            try {
+              const attempts = await api(
+                `/faculty/students/${review.student_id}/milestones/${review.milestone_id}/submissions`,
+                {
+                  signal:
+                    controller.signal,
+                }
+              );
+
+              loadedSubmissions[
+                reviewKey
+              ] = attempts;
+            } catch (err) {
+              if (
+                !controller.signal.aborted
+              ) {
+                loadedErrors[
+                  reviewKey
+                ] = err.message;
               }
-            );
-
-            loadedSubmissions[reviewKey] = attempts;
-          } catch (err) {
-            if (!controller.signal.aborted) {
-              loadedErrors[reviewKey] = err.message;
             }
           }
-        })
+        )
       );
 
       if (!controller.signal.aborted) {
-        setSubmissions(loadedSubmissions);
-        setSubmissionErrors(loadedErrors);
+        setSubmissions(
+          loadedSubmissions
+        );
+        setSubmissionErrors(
+          loadedErrors
+        );
       }
     }
 
@@ -185,12 +244,17 @@ export default function FacultyDashboard() {
   }, [data]);
 
 
-  async function handleReview(review, status) {
+  async function handleReview(
+    review,
+    status
+  ) {
     const reviewKey =
       `${review.student_id}-${review.milestone_id}`;
 
     const comment =
-      reviewComments[reviewKey]?.trim() || null;
+      reviewComments[
+        reviewKey
+      ]?.trim() || null;
 
     setReviewing(reviewKey);
     setReviewError("");
@@ -207,13 +271,21 @@ export default function FacultyDashboard() {
         }
       );
 
-      setReviewComments((current) => {
-        const updated = { ...current };
-        delete updated[reviewKey];
-        return updated;
-      });
+      setReviewComments(
+        (current) => {
+          const updated = {
+            ...current,
+          };
 
-      setAttempt((value) => value + 1);
+          delete updated[reviewKey];
+
+          return updated;
+        }
+      );
+
+      setAttempt(
+        (value) => value + 1
+      );
     } catch (err) {
       setReviewError(err.message);
     } finally {
@@ -222,7 +294,9 @@ export default function FacultyDashboard() {
   }
 
 
-  async function handleDocumentDownload(document) {
+  async function handleDocumentDownload(
+    document
+  ) {
     setReviewError("");
 
     try {
@@ -233,13 +307,17 @@ export default function FacultyDashboard() {
         {
           headers: {
             ...(token && {
-              Authorization: `Bearer ${token}`,
+              Authorization:
+                `Bearer ${token}`,
             }),
           },
         }
       );
 
-      if (response.status === 401 && token) {
+      if (
+        response.status === 401 &&
+        token
+      ) {
         throw new Error(
           "Your session has expired. Please log in again."
         );
@@ -256,14 +334,25 @@ export default function FacultyDashboard() {
         );
       }
 
-      const blob = await response.blob();
-      const url = URL.createObjectURL(blob);
+      const blob =
+        await response.blob();
 
-      const link = window.document.createElement("a");
+      const url =
+        URL.createObjectURL(blob);
+
+      const link =
+        window.document.createElement(
+          "a"
+        );
+
       link.href = url;
-      link.download = document.filename;
+      link.download =
+        document.filename;
 
-      window.document.body.appendChild(link);
+      window.document.body.appendChild(
+        link
+      );
+
       link.click();
       link.remove();
 
@@ -278,7 +367,10 @@ export default function FacultyDashboard() {
     invitation,
     status
   ) {
-    setRespondingToInvitation(invitation.id);
+    setRespondingToInvitation(
+      invitation.id
+    );
+
     setInvitationError("");
 
     try {
@@ -286,55 +378,72 @@ export default function FacultyDashboard() {
         `/faculty/committee-invitations/${invitation.id}`,
         {
           method: "PATCH",
-          body: JSON.stringify({ status }),
+          body: JSON.stringify({
+            status,
+          }),
         }
       );
 
-      setInvitations((current) =>
-        current.filter(
-          (item) => item.id !== invitation.id
-        )
+      setInvitations(
+        (current) =>
+          current.filter(
+            (item) =>
+              item.id !==
+              invitation.id
+          )
       );
 
       if (status === "approved") {
         try {
-          const refreshed = await api(
-            "/faculty/me/committee-memberships"
-          );
+          const refreshed =
+            await api(
+              "/faculty/me/committee-memberships"
+            );
 
-          setMemberships(refreshed);
+          setMemberships(
+            refreshed
+          );
         } catch {
           // Membership will refresh next time the dashboard loads.
         }
       }
     } catch (err) {
-      setInvitationError(err.message);
+      setInvitationError(
+        err.message
+      );
 
       // The student may have removed the invitation,
       // or another response may already have been recorded.
       try {
-        const refreshed = await api(
-          "/faculty/me/committee-invitations"
-        );
+        const refreshed =
+          await api(
+            "/faculty/me/committee-invitations"
+          );
 
-        setInvitations(refreshed);
+        setInvitations(
+          refreshed
+        );
       } catch {
         // Keep the original backend error visible.
       }
     } finally {
-      setRespondingToInvitation(null);
+      setRespondingToInvitation(
+        null
+      );
     }
   }
 
 
-  // Runs when the faculty member confirms in the box.
   async function handleLeaveCommittee() {
-    // Remember which committee they're leaving.
-    const membership = membershipToLeave;
-    // Close the box.
+    const membership =
+      membershipToLeave;
+
     setMembershipToLeave(null);
 
-    setLeavingMembership(membership.id);
+    setLeavingMembership(
+      membership.id
+    );
+
     setMembershipError("");
 
     try {
@@ -345,21 +454,29 @@ export default function FacultyDashboard() {
         }
       );
 
-      setMemberships((current) =>
-        current.filter(
-          (item) => item.id !== membership.id
-        )
+      setMemberships(
+        (current) =>
+          current.filter(
+            (item) =>
+              item.id !==
+              membership.id
+          )
       );
     } catch (err) {
-      setMembershipError(err.message);
+      setMembershipError(
+        err.message
+      );
 
       // Refresh in case the membership was already removed.
       try {
-        const refreshed = await api(
-          "/faculty/me/committee-memberships"
-        );
+        const refreshed =
+          await api(
+            "/faculty/me/committee-memberships"
+          );
 
-        setMemberships(refreshed);
+        setMemberships(
+          refreshed
+        );
       } catch {
         // Keep the original backend error visible.
       }
@@ -386,7 +503,9 @@ export default function FacultyDashboard() {
         <button
           type="button"
           onClick={() =>
-            setAttempt((value) => value + 1)
+            setAttempt(
+              (value) => value + 1
+            )
           }
           className="mt-5 rounded-lg bg-sage px-4 py-2 font-semibold text-ink hover:bg-sage-light"
         >
@@ -429,7 +548,8 @@ export default function FacultyDashboard() {
         </h1>
 
         <p className="mt-2 text-sm text-mist/65">
-          Welcome back, {faculty.full_name}.
+          Welcome back,{" "}
+          {faculty.full_name}.
         </p>
       </header>
 
@@ -441,11 +561,14 @@ export default function FacultyDashboard() {
           </p>
 
           <p className="mt-3 font-display text-3xl font-bold text-white">
-            {summary.assigned_students}
+            {
+              summary.assigned_students
+            }
           </p>
 
           <p className="mt-1 text-sm text-mist/60">
-            Students currently assigned to you
+            Students currently assigned
+            to you
           </p>
         </div>
 
@@ -455,17 +578,26 @@ export default function FacultyDashboard() {
           </p>
 
           <p className="mt-3 font-display text-3xl font-bold text-sage">
-            {summary.pending_reviews}
+            {
+              summary.pending_reviews
+            }
           </p>
 
           <p className="mt-1 text-sm text-mist/60">
-            Milestone submissions requiring attention
+            Milestone submissions
+            requiring attention
           </p>
         </div>
       </section>
 
 
-      <section id="section-invitations" aria-labelledby="committee-invitations-title" className={highlightClass("section-invitations")}>
+      <section
+        id="section-invitations"
+        aria-labelledby="committee-invitations-title"
+        className={highlightClass(
+          "section-invitations"
+        )}
+      >
         <div className="mb-3 flex items-center gap-2">
           <h2
             id="committee-invitations-title"
@@ -490,86 +622,109 @@ export default function FacultyDashboard() {
 
         {invitations.length > 0 ? (
           <div className="space-y-2">
-            {invitations.map((invitation) => {
-              const isResponding =
-                respondingToInvitation === invitation.id;
+            {invitations.map(
+              (invitation) => {
+                const isResponding =
+                  respondingToInvitation ===
+                  invitation.id;
 
-              return (
-                <div
-                  key={invitation.id}
-                  className="rounded-xl border border-line bg-panel p-4"
-                >
-                  <div className="flex flex-wrap items-center justify-between gap-3">
-                    <div>
-                      <h3 className="font-display font-semibold text-white">
-                        {invitation.student_name}
-                      </h3>
+                return (
+                  <div
+                    key={
+                      invitation.id
+                    }
+                    className="rounded-xl border border-line bg-panel p-4"
+                  >
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <div>
+                        <h3 className="font-display font-semibold text-white">
+                          {
+                            invitation.student_name
+                          }
+                        </h3>
 
-                      <p className="mt-1 text-sm text-mist/65">
-                        Invited you to join their
-                        dissertation committee
-                      </p>
+                        <p className="mt-1 text-sm text-mist/65">
+                          Invited you to
+                          join their
+                          dissertation
+                          committee
+                        </p>
 
-                      <p className="mt-1 text-xs text-mist/45">
-                        Invited on{" "}
-                        {invitation.invited_on}
-                      </p>
+                        <p className="mt-1 text-xs text-mist/45">
+                          Invited on{" "}
+                          {
+                            invitation.invited_on
+                          }
+                        </p>
+                      </div>
+
+                      <span className="rounded-full border border-sage/25 bg-sage/10 px-3 py-1 text-xs text-sage">
+                        Pending
+                      </span>
                     </div>
 
-                    <span className="rounded-full border border-sage/25 bg-sage/10 px-3 py-1 text-xs text-sage">
-                      Pending
-                    </span>
+                    <div className="mt-4 flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        disabled={
+                          isResponding
+                        }
+                        onClick={() =>
+                          handleCommitteeResponse(
+                            invitation,
+                            "approved"
+                          )
+                        }
+                        className="rounded-lg bg-sage px-3 py-2 text-sm font-semibold text-ink hover:bg-sage-light disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        Approve
+                      </button>
+
+                      <button
+                        type="button"
+                        disabled={
+                          isResponding
+                        }
+                        onClick={() =>
+                          handleCommitteeResponse(
+                            invitation,
+                            "declined"
+                          )
+                        }
+                        className="rounded-lg border border-red-400/30 px-3 py-2 text-sm font-semibold text-red-300 hover:bg-red-400/10 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        Decline
+                      </button>
+                    </div>
+
+                    {isResponding && (
+                      <p className="mt-2 text-xs text-mist/50">
+                        Updating
+                        invitation…
+                      </p>
+                    )}
                   </div>
-
-                  <div className="mt-4 flex flex-wrap gap-2">
-                    <button
-                      type="button"
-                      disabled={isResponding}
-                      onClick={() =>
-                        handleCommitteeResponse(
-                          invitation,
-                          "approved"
-                        )
-                      }
-                      className="rounded-lg bg-sage px-3 py-2 text-sm font-semibold text-ink hover:bg-sage-light disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      Approve
-                    </button>
-
-                    <button
-                      type="button"
-                      disabled={isResponding}
-                      onClick={() =>
-                        handleCommitteeResponse(
-                          invitation,
-                          "declined"
-                        )
-                      }
-                      className="rounded-lg border border-red-400/30 px-3 py-2 text-sm font-semibold text-red-300 hover:bg-red-400/10 disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      Decline
-                    </button>
-                  </div>
-
-                  {isResponding && (
-                    <p className="mt-2 text-xs text-mist/50">
-                      Updating invitation…
-                    </p>
-                  )}
-                </div>
-              );
-            })}
+                );
+              }
+            )}
           </div>
         ) : (
           <p className="rounded-xl border border-dashed border-line px-5 py-4 text-sm text-mist/50">
-            No committee invitations are waiting
-            for your response.
+            No committee invitations
+            are waiting for your
+            response.
           </p>
         )}
       </section>
 
 
-      <section id="section-memberships" aria-labelledby="committee-memberships-title" className={highlightClass("section-memberships")}>
+      <section
+        id="section-memberships"
+        aria-labelledby="committee-memberships-title"
+        className={highlightClass(
+          "section-memberships"
+        )}
+      >
         <div className="mb-3 flex items-center gap-2">
           <h2
             id="committee-memberships-title"
@@ -594,64 +749,85 @@ export default function FacultyDashboard() {
 
         {memberships.length > 0 ? (
           <div className="space-y-2">
-            {memberships.map((membership) => {
-              const isLeaving =
-                leavingMembership === membership.id;
+            {memberships.map(
+              (membership) => {
+                const isLeaving =
+                  leavingMembership ===
+                  membership.id;
 
-              return (
-                <div
-                  key={membership.id}
-                  className="rounded-xl border border-line bg-panel p-4"
-                >
-                  <div className="flex flex-wrap items-center justify-between gap-4">
-                    <div>
-                      <h3 className="font-display font-semibold text-white">
-                        {membership.student_name}
-                      </h3>
+                return (
+                  <div
+                    key={
+                      membership.id
+                    }
+                    className="rounded-xl border border-line bg-panel p-4"
+                  >
+                    <div className="flex flex-wrap items-center justify-between gap-4">
+                      <div>
+                        <h3 className="font-display font-semibold text-white">
+                          {
+                            membership.student_name
+                          }
+                        </h3>
 
-                      <p className="mt-1 text-sm text-mist/65">
-                        Dissertation committee member
-                      </p>
+                        <p className="mt-1 text-sm text-mist/65">
+                          Dissertation
+                          committee member
+                        </p>
 
-                      <p className="mt-1 text-xs text-mist/45">
-                        Invitation date{" "}
-                        {membership.invited_on}
-                      </p>
-                    </div>
+                        <p className="mt-1 text-xs text-mist/45">
+                          Invitation date{" "}
+                          {
+                            membership.invited_on
+                          }
+                        </p>
+                      </div>
 
-                    <div className="flex flex-wrap items-center gap-3">
-                      <span className="rounded-full border border-sage/25 bg-sage/10 px-3 py-1 text-xs text-sage">
-                        Approved
-                      </span>
+                      <div className="flex flex-wrap items-center gap-3">
+                        <span className="rounded-full border border-sage/25 bg-sage/10 px-3 py-1 text-xs text-sage">
+                          Approved
+                        </span>
 
-                      <button
-                        type="button"
-                        disabled={isLeaving}
-                        onClick={() =>
-                          setMembershipToLeave(membership)
-                        }
-                        className="rounded-lg border border-red-400/30 px-3 py-2 text-sm font-semibold text-red-300 hover:bg-red-400/10 disabled:cursor-not-allowed disabled:opacity-50"
-                      >
-                        {isLeaving
-                          ? "Leaving…"
-                          : "Leave Committee"}
-                      </button>
+                        <button
+                          type="button"
+                          disabled={
+                            isLeaving
+                          }
+                          onClick={() =>
+                            setMembershipToLeave(
+                              membership
+                            )
+                          }
+                          className="rounded-lg border border-red-400/30 px-3 py-2 text-sm font-semibold text-red-300 hover:bg-red-400/10 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          {isLeaving
+                            ? "Leaving…"
+                            : "Leave Committee"}
+                        </button>
+                      </div>
                     </div>
                   </div>
-                </div>
-              );
-            })}
+                );
+              }
+            )}
           </div>
         ) : (
           <p className="rounded-xl border border-dashed border-line px-5 py-4 text-sm text-mist/50">
-            You are not currently serving on any
-            student dissertation committees.
+            You are not currently
+            serving on any student
+            dissertation committees.
           </p>
         )}
       </section>
 
 
-      <section id="section-reviews" aria-labelledby="reviews-title" className={highlightClass("section-reviews")}>
+      <section
+        id="section-reviews"
+        aria-labelledby="reviews-title"
+        className={highlightClass(
+          "section-reviews"
+        )}
+      >
         <div className="mb-3 flex items-center gap-2">
           <h2
             id="reviews-title"
@@ -674,302 +850,404 @@ export default function FacultyDashboard() {
           </p>
         )}
 
-        {pending_reviews.length > 0 ? (
+        {pending_reviews.length >
+        0 ? (
           <div className="space-y-3">
-            {pending_reviews.map((review) => {
-              const reviewKey =
-                `${review.student_id}-${review.milestone_id}`;
+            {pending_reviews.map(
+              (review) => {
+                const reviewKey =
+                  `${review.student_id}-${review.milestone_id}`;
 
-              const isReviewing =
-                reviewing === reviewKey;
+                const isReviewing =
+                  reviewing ===
+                  reviewKey;
 
-              const reviewSubmissions =
-                submissions[reviewKey];
+                const reviewSubmissions =
+                  submissions[
+                    reviewKey
+                  ];
 
-              const submissionError =
-                submissionErrors[reviewKey];
+                const submissionError =
+                  submissionErrors[
+                    reviewKey
+                  ];
 
-              return (
-                <div
-                  key={reviewKey}
-                  id={`review-${reviewKey}`}
-                  className={`rounded-xl border border-line bg-panel p-4 ${highlightClass(`review-${reviewKey}`)}`}
-                >
-                  <div className="flex flex-wrap items-center justify-between gap-3">
-                    <div>
-                      <h3 className="font-display font-semibold text-white">
-                        {review.student_name}
-                      </h3>
+                return (
+                  <div
+                    key={reviewKey}
+                    id={`review-${reviewKey}`}
+                    className={`rounded-xl border border-line bg-panel p-4 ${highlightClass(
+                      `review-${reviewKey}`
+                    )}`}
+                  >
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <div>
+                        <h3 className="font-display font-semibold text-white">
+                          {
+                            review.student_name
+                          }
+                        </h3>
 
-                      <p className="mt-1 text-sm text-mist/65">
-                        {review.milestone_name}
-                      </p>
+                        <p className="mt-1 text-sm text-mist/65">
+                          {
+                            review.milestone_name
+                          }
+                        </p>
+                      </div>
+
+                      <span className="rounded-full border border-sage/25 bg-sage/10 px-3 py-1 text-xs text-sage">
+                        {STATUS_LABELS[
+                          review.status
+                        ] ||
+                          review.status}
+                      </span>
                     </div>
 
-                    <span className="rounded-full border border-sage/25 bg-sage/10 px-3 py-1 text-xs text-sage">
-                      {STATUS_LABELS[review.status] ||
-                        review.status}
-                    </span>
-                  </div>
 
-
-                  <div className="mt-4 rounded-xl border border-line/70 bg-ink/20 p-4">
-                    <p className="text-xs font-semibold uppercase tracking-[0.14em] text-mist/60">
-                      Submitted files
-                    </p>
-
-                    {submissionError ? (
-                      <p className="mt-3 text-sm text-red-300">
-                        Unable to load submitted files:{" "}
-                        {submissionError}
+                    <div className="mt-4 rounded-xl border border-line/70 bg-ink/20 p-4">
+                      <p className="text-xs font-semibold uppercase tracking-[0.14em] text-mist/60">
+                        Submitted files
                       </p>
-                    ) : reviewSubmissions === undefined ? (
-                      <p className="mt-3 text-sm text-mist/50">
-                        Loading submitted files…
-                      </p>
-                    ) : reviewSubmissions.length === 0 ? (
-                      <p className="mt-3 text-sm text-mist/50">
-                        No submitted files found.
-                      </p>
-                    ) : (
-                      <div className="mt-3 space-y-4">
-                        {reviewSubmissions.map(
-                          (submission) => (
-                            <div
-                              key={submission.attempt}
-                              className="rounded-lg border border-line/60 p-3"
-                            >
-                              <div className="flex flex-wrap items-center justify-between gap-2">
-                                <p className="text-sm font-semibold text-white">
-                                  Attempt{" "}
-                                  {submission.attempt}
-                                </p>
 
-                                <p className="text-xs text-mist/45">
-                                  {new Date(
-                                    submission.submitted_at
-                                  ).toLocaleString()}
-                                </p>
-                              </div>
+                      {submissionError ? (
+                        <p className="mt-3 text-sm text-red-300">
+                          Unable to load
+                          submitted
+                          files:{" "}
+                          {
+                            submissionError
+                          }
+                        </p>
+                      ) : reviewSubmissions ===
+                        undefined ? (
+                        <p className="mt-3 text-sm text-mist/50">
+                          Loading
+                          submitted
+                          files…
+                        </p>
+                      ) : reviewSubmissions.length ===
+                        0 ? (
+                        <p className="mt-3 text-sm text-mist/50">
+                          No submitted
+                          files found.
+                        </p>
+                      ) : (
+                        <div className="mt-3 space-y-4">
+                          {reviewSubmissions.map(
+                            (
+                              submission
+                            ) => (
+                              <div
+                                key={
+                                  submission.attempt
+                                }
+                                className="rounded-lg border border-line/60 p-3"
+                              >
+                                <div className="flex flex-wrap items-center justify-between gap-2">
+                                  <p className="text-sm font-semibold text-white">
+                                    Attempt{" "}
+                                    {
+                                      submission.attempt
+                                    }
+                                  </p>
 
-                              {submission.documents.length >
-                              0 ? (
-                                <div className="mt-3 space-y-2">
-                                  {submission.documents.map(
-                                    (document) => (
-                                      <div
-                                        key={document.id}
-                                        className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-panel px-3 py-2"
-                                      >
-                                        <div>
-                                          <p className="text-sm text-mist/85">
-                                            {
-                                              document.filename
-                                            }
-                                          </p>
-
-                                          <p className="mt-0.5 text-xs text-mist/45">
-                                            {Math.max(
-                                              1,
-                                              Math.round(
-                                                document.size_bytes /
-                                                  1024
-                                              )
-                                            )}{" "}
-                                            KB
-                                          </p>
-                                        </div>
-
-                                        <button
-                                          type="button"
-                                          onClick={() =>
-                                            handleDocumentDownload(
-                                              document
-                                            )
-                                          }
-                                          className="rounded-lg border border-sage/30 px-3 py-1.5 text-xs font-semibold text-sage hover:bg-sage/10"
-                                        >
-                                          Download
-                                        </button>
-                                      </div>
-                                    )
-                                  )}
+                                  <p className="text-xs text-mist/45">
+                                    {new Date(
+                                      submission.submitted_at
+                                    ).toLocaleString()}
+                                  </p>
                                 </div>
-                              ) : (
-                                <p className="mt-2 text-xs text-mist/50">
-                                  This attempt has no
-                                  attached files.
-                                </p>
-                              )}
-                            </div>
+
+                                {submission
+                                  .documents
+                                  .length >
+                                0 ? (
+                                  <div className="mt-3 space-y-2">
+                                    {submission.documents.map(
+                                      (
+                                        document
+                                      ) => (
+                                        <div
+                                          key={
+                                            document.id
+                                          }
+                                          className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-panel px-3 py-2"
+                                        >
+                                          <div>
+                                            <p className="text-sm text-mist/85">
+                                              {
+                                                document.filename
+                                              }
+                                            </p>
+
+                                            <p className="mt-0.5 text-xs text-mist/45">
+                                              {Math.max(
+                                                1,
+                                                Math.round(
+                                                  document.size_bytes /
+                                                    1024
+                                                )
+                                              )}{" "}
+                                              KB
+                                            </p>
+                                          </div>
+
+                                          <button
+                                            type="button"
+                                            onClick={() =>
+                                              handleDocumentDownload(
+                                                document
+                                              )
+                                            }
+                                            className="rounded-lg border border-sage/30 px-3 py-1.5 text-xs font-semibold text-sage hover:bg-sage/10"
+                                          >
+                                            Download
+                                          </button>
+                                        </div>
+                                      )
+                                    )}
+                                  </div>
+                                ) : (
+                                  <p className="mt-2 text-xs text-mist/50">
+                                    This
+                                    attempt
+                                    has no
+                                    attached
+                                    files.
+                                  </p>
+                                )}
+                              </div>
+                            )
+                          )}
+                        </div>
+                      )}
+                    </div>
+
+
+                    <div className="mt-4">
+                      <label
+                        htmlFor={`review-comment-${reviewKey}`}
+                        className="text-xs font-semibold uppercase tracking-[0.14em] text-mist/60"
+                      >
+                        Review comment
+                      </label>
+
+                      <textarea
+                        id={`review-comment-${reviewKey}`}
+                        rows={3}
+                        value={
+                          reviewComments[
+                            reviewKey
+                          ] || ""
+                        }
+                        disabled={
+                          isReviewing
+                        }
+                        onChange={(
+                          event
+                        ) =>
+                          setReviewComments(
+                            (
+                              current
+                            ) => ({
+                              ...current,
+                              [reviewKey]:
+                                event
+                                  .target
+                                  .value,
+                            })
                           )
-                        )}
-                      </div>
+                        }
+                        placeholder="Optional comment for the student"
+                        className="mt-2 w-full resize-y rounded-xl border border-line bg-ink/30 px-3 py-2 text-sm text-white outline-none placeholder:text-mist/35 focus:border-sage/50 disabled:cursor-not-allowed disabled:opacity-50"
+                      />
+                    </div>
+
+
+                    <div className="mt-4 flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        disabled={
+                          isReviewing
+                        }
+                        onClick={() =>
+                          handleReview(
+                            review,
+                            "approved"
+                          )
+                        }
+                        className="rounded-lg bg-sage px-3 py-2 text-sm font-semibold text-ink hover:bg-sage-light disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        Approve
+                      </button>
+
+                      <button
+                        type="button"
+                        disabled={
+                          isReviewing
+                        }
+                        onClick={() =>
+                          handleReview(
+                            review,
+                            "revision_requested"
+                          )
+                        }
+                        className="rounded-lg border border-line px-3 py-2 text-sm font-semibold text-mist hover:border-sage/40 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        Request revision
+                      </button>
+
+                      <button
+                        type="button"
+                        disabled={
+                          isReviewing
+                        }
+                        onClick={() =>
+                          handleReview(
+                            review,
+                            "rejected"
+                          )
+                        }
+                        className="rounded-lg border border-red-400/30 px-3 py-2 text-sm font-semibold text-red-300 hover:bg-red-400/10 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        Reject
+                      </button>
+                    </div>
+
+                    {isReviewing && (
+                      <p className="mt-2 text-xs text-mist/50">
+                        Updating
+                        milestone…
+                      </p>
                     )}
                   </div>
-
-
-                  <div className="mt-4">
-                    <label
-                      htmlFor={`review-comment-${reviewKey}`}
-                      className="text-xs font-semibold uppercase tracking-[0.14em] text-mist/60"
-                    >
-                      Review comment
-                    </label>
-
-                    <textarea
-                      id={`review-comment-${reviewKey}`}
-                      rows={3}
-                      value={
-                        reviewComments[reviewKey] || ""
-                      }
-                      disabled={isReviewing}
-                      onChange={(event) =>
-                        setReviewComments(
-                          (current) => ({
-                            ...current,
-                            [reviewKey]:
-                              event.target.value,
-                          })
-                        )
-                      }
-                      placeholder="Optional comment for the student"
-                      className="mt-2 w-full resize-y rounded-xl border border-line bg-ink/30 px-3 py-2 text-sm text-white outline-none placeholder:text-mist/35 focus:border-sage/50 disabled:cursor-not-allowed disabled:opacity-50"
-                    />
-                  </div>
-
-
-                  <div className="mt-4 flex flex-wrap gap-2">
-                    <button
-                      type="button"
-                      disabled={isReviewing}
-                      onClick={() =>
-                        handleReview(
-                          review,
-                          "approved"
-                        )
-                      }
-                      className="rounded-lg bg-sage px-3 py-2 text-sm font-semibold text-ink hover:bg-sage-light disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      Approve
-                    </button>
-
-                    <button
-                      type="button"
-                      disabled={isReviewing}
-                      onClick={() =>
-                        handleReview(
-                          review,
-                          "revision_requested"
-                        )
-                      }
-                      className="rounded-lg border border-line px-3 py-2 text-sm font-semibold text-mist hover:border-sage/40 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      Request revision
-                    </button>
-
-                    <button
-                      type="button"
-                      disabled={isReviewing}
-                      onClick={() =>
-                        handleReview(
-                          review,
-                          "rejected"
-                        )
-                      }
-                      className="rounded-lg border border-red-400/30 px-3 py-2 text-sm font-semibold text-red-300 hover:bg-red-400/10 disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      Reject
-                    </button>
-                  </div>
-
-                  {isReviewing && (
-                    <p className="mt-2 text-xs text-mist/50">
-                      Updating milestone…
-                    </p>
-                  )}
-                </div>
-              );
-            })}
+                );
+              }
+            )}
           </div>
         ) : (
           <p className="rounded-xl border border-dashed border-line px-5 py-4 text-sm text-mist/50">
-            No milestone submissions are waiting
-            for review.
+            No milestone submissions
+            are waiting for review.
           </p>
         )}
       </section>
 
 
-      <section id="section-students" aria-labelledby="students-title" className={highlightClass("section-students")}>
-        <div className="mb-3 flex items-center gap-2">
-          <h2
-            id="students-title"
-            className="text-xs font-semibold uppercase tracking-[0.16em] text-mist/70"
-          >
-            My students
-          </h2>
+      <section
+        id="section-students"
+        aria-labelledby="students-title"
+        className={highlightClass(
+          "section-students"
+        )}
+      >
+        <div className="mb-3 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <h2
+              id="students-title"
+              className="text-xs font-semibold uppercase tracking-[0.16em] text-mist/70"
+            >
+              My students
+            </h2>
 
-          <span className="rounded-full bg-panel px-2 py-0.5 text-xs text-mist/60">
-            {students.length}
-          </span>
+            <span className="rounded-full bg-panel px-2 py-0.5 text-xs text-mist/60">
+              {students.length}
+            </span>
+          </div>
+
+          {students.length > 0 && (
+            <p className="text-xs text-mist/45">
+              Select a student to view
+              detailed progress
+            </p>
+          )}
         </div>
 
         {students.length > 0 ? (
           <div className="grid gap-3 lg:grid-cols-2">
-            {students.map((student) => (
-              <article
-                key={student.id}
-                className="rounded-xl border border-line bg-panel p-5"
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <h3 className="font-display font-semibold text-white">
-                      {student.full_name}
-                    </h3>
+            {students.map(
+              (student) => (
+                <Link
+                  key={student.id}
+                  to={`/faculty/students/${student.id}/progress`}
+                  className="group block rounded-xl border border-line bg-panel p-5 transition-colors hover:border-sage/40 hover:bg-panel/80"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <h3 className="font-display font-semibold text-white transition-colors group-hover:text-sage">
+                        {
+                          student.full_name
+                        }
+                      </h3>
 
-                    <p className="mt-1 text-xs text-mist/50">
-                      {student.program_year > 0
-                        ? `Program Year ${student.program_year}`
-                        : student.program_year === 0
-                        ? "Not yet started"
-                        : "Program year unavailable"}
-                    </p>
+                      <p className="mt-1 text-xs text-mist/50">
+                        {student.program_year >
+                        0
+                          ? `Program Year ${student.program_year}`
+                          : student.program_year ===
+                            0
+                          ? "Not yet started"
+                          : "Program year unavailable"}
+                      </p>
+                    </div>
+
+                    <span className="text-sm font-semibold text-sage">
+                      {
+                        student.progress_percent
+                      }
+                      %
+                    </span>
                   </div>
 
-                  <span className="text-sm font-semibold text-sage">
-                    {student.progress_percent}%
-                  </span>
-                </div>
+                  <div className="mt-4">
+                    <ProgressBar
+                      value={
+                        student.progress_percent
+                      }
+                    />
+                  </div>
 
-                <div className="mt-4">
-                  <ProgressBar
-                    value={student.progress_percent}
-                  />
-                </div>
+                  <div className="mt-3 flex items-center justify-between gap-3">
+                    <p className="text-xs text-mist/55">
+                      {
+                        student.completed_milestones
+                      }{" "}
+                      of{" "}
+                      {
+                        student.total_milestones
+                      }{" "}
+                      milestones approved
+                    </p>
 
-                <p className="mt-3 text-xs text-mist/55">
-                  {student.completed_milestones} of{" "}
-                  {student.total_milestones} milestones
-                  approved
-                </p>
-              </article>
-            ))}
+                    <span className="shrink-0 text-xs font-semibold text-sage opacity-70 transition-opacity group-hover:opacity-100">
+                      View progress →
+                    </span>
+                  </div>
+                </Link>
+              )
+            )}
           </div>
         ) : (
           <p className="rounded-xl border border-dashed border-line px-5 py-4 text-sm text-mist/50">
-            No students are currently assigned to you.
+            No students are currently
+            assigned to you.
           </p>
         )}
       </section>
 
-      {/* The "are you sure?" box, while leaving a committee is waiting to be confirmed. */}
+
       {membershipToLeave && (
         <ConfirmDialog
           title={`Leave ${membershipToLeave.student_name}'s dissertation committee?`}
           confirmLabel="Leave"
-          onConfirm={handleLeaveCommittee}
-          onCancel={() => setMembershipToLeave(null)}
+          onConfirm={
+            handleLeaveCommittee
+          }
+          onCancel={() =>
+            setMembershipToLeave(
+              null
+            )
+          }
         />
       )}
     </div>

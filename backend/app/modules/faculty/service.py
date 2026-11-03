@@ -7,21 +7,25 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.modules.committee.models import CommitteeMember
+from app.modules.faculty.models import FacultyProfile as FacultyProfileModel
 from app.modules.faculty.schemas import (
     AssignedStudentOut,
     CommitteeInvitationOut,
     CommitteeMembershipOut,
     FacultyDashboardOut,
     FacultyProfile,
+    FacultyProfileOut,
+    FacultyProfileUpdate,
+    FacultyStudentProgressOut,
     FacultySummary,
     PendingReviewOut,
+    StudentMilestoneDetailOut,
 )
 from app.modules.milestones.models import (
     Milestone,
     MilestoneStatus,
     StudentMilestone,
 )
-# The page a notification opens when clicked.
 from app.modules.notifications import links
 from app.modules.notifications.models import Notification
 from app.modules.student.service import semester_index
@@ -36,16 +40,45 @@ REVIEW_STATUSES = {
 }
 
 
+def _get_program_year(
+    student: User,
+    today: date,
+) -> int | None:
+    """Calculate the student's current program year."""
+    if (
+        student.start_year is None
+        or student.start_term is None
+    ):
+        return None
+
+    now = semester_index(today)
+
+    start = (
+        student.start_year * 2
+        + (student.start_term == Term.FALL)
+    )
+
+    current_semester = max(
+        0,
+        now - start + 1,
+    )
+
+    return (
+        (current_semester + 1) // 2
+        if current_semester > 0
+        else 0
+    )
+
+
 def get_faculty_dashboard(
     db: Session,
     faculty: User,
     today: date | None = None,
 ) -> FacultyDashboardOut:
+    """Build the logged-in faculty member's dashboard."""
     today = today or datetime.now(
         ZoneInfo("America/New_York")
     ).date()
-
-    now = semester_index(today)
 
     students = list(
         db.scalars(
@@ -97,33 +130,14 @@ def get_faculty_dashboard(
             else 0
         )
 
-        if (
-            student.start_year is not None
-            and student.start_term is not None
-        ):
-            start = (
-                student.start_year * 2
-                + (student.start_term == Term.FALL)
-            )
-
-            current_semester = max(
-                0,
-                now - start + 1,
-            )
-
-            program_year = (
-                (current_semester + 1) // 2
-                if current_semester > 0
-                else 0
-            )
-        else:
-            program_year = None
-
         student_outputs.append(
             AssignedStudentOut(
                 id=student.id,
                 full_name=student.full_name,
-                program_year=program_year,
+                program_year=_get_program_year(
+                    student,
+                    today,
+                ),
                 completed_milestones=completed,
                 total_milestones=total,
                 progress_percent=progress_percent,
@@ -173,8 +187,7 @@ def review_student_milestone(
     new_status: MilestoneStatus,
     comment: str | None = None,
 ) -> StudentMilestone | None:
-    # Faculty can only review milestones for students
-    # assigned to them.
+    """Review a milestone belonging to an assigned student."""
     student = db.scalar(
         select(User).where(
             User.id == student_id,
@@ -229,6 +242,7 @@ def get_pending_committee_invitations(
     db: Session,
     faculty: User,
 ) -> list[CommitteeInvitationOut]:
+    """Return pending committee invitations for this faculty member."""
     rows = db.execute(
         select(CommitteeMember, User)
         .join(
@@ -259,6 +273,7 @@ def respond_to_committee_invitation(
     invitation_id: int,
     new_status: str,
 ) -> CommitteeMember | None:
+    """Approve or decline one pending committee invitation."""
     invitation = db.scalar(
         select(CommitteeMember).where(
             CommitteeMember.id == invitation_id,
@@ -274,8 +289,6 @@ def respond_to_committee_invitation(
 
     invitation.status = new_status
 
-    # Tell the student whether the faculty member
-    # accepted or declined the invitation.
     action = (
         "accepted"
         if new_status == "approved"
@@ -289,7 +302,6 @@ def respond_to_committee_invitation(
                 f"{faculty.full_name} {action} your "
                 "dissertation committee invitation."
             ),
-            # Clicking it opens the student's committee.
             link=links.student_committee(db),
         )
     )
@@ -348,8 +360,6 @@ def leave_committee(
 
     student_id = membership.student_id
 
-    # Notify the student that this faculty member
-    # has left their dissertation committee.
     db.add(
         Notification(
             user_id=student_id,
@@ -357,7 +367,6 @@ def leave_committee(
                 f"{faculty.full_name} left your "
                 "dissertation committee."
             ),
-            # Clicking it opens the student's committee.
             link=links.student_committee(db),
         )
     )
@@ -366,4 +375,182 @@ def leave_committee(
     db.commit()
 
     return True
+
+
+def get_faculty_profile(
+    db: Session,
+    faculty: User,
+) -> FacultyProfileOut:
+    """Return the logged-in faculty member's profile."""
+    profile = db.get(
+        FacultyProfileModel,
+        faculty.id,
+    )
+
+    return FacultyProfileOut(
+        full_name=faculty.full_name,
+        email=faculty.email,
+        title=profile.title if profile else None,
+        department=profile.department if profile else None,
+        affiliation=profile.affiliation if profile else None,
+        research_interests=(
+            profile.research_interests
+            if profile
+            else None
+        ),
+        lab_name=profile.lab_name if profile else None,
+        accepting_students=(
+            profile.accepting_students
+            if profile
+            else None
+        ),
+        academic_url=(
+            profile.academic_url
+            if profile
+            else None
+        ),
+        bio=profile.bio if profile else None,
+    )
+
+
+def save_faculty_profile(
+    db: Session,
+    faculty: User,
+    data: FacultyProfileUpdate,
+) -> FacultyProfileOut:
+    """Create or update the logged-in faculty member's profile."""
+    faculty.full_name = data.full_name.strip()
+
+    profile = db.get(
+        FacultyProfileModel,
+        faculty.id,
+    )
+
+    if profile is None:
+        profile = FacultyProfileModel(
+            user_id=faculty.id,
+        )
+        db.add(profile)
+
+    profile.title = data.title
+    profile.department = data.department
+    profile.affiliation = data.affiliation
+    profile.research_interests = data.research_interests
+    profile.lab_name = data.lab_name
+    profile.accepting_students = data.accepting_students
+    profile.academic_url = data.academic_url
+    profile.bio = data.bio
+
+    db.commit()
+    db.refresh(faculty)
+    db.refresh(profile)
+
+    return get_faculty_profile(
+        db,
+        faculty,
+    )
+
+
+def get_student_progress_for_faculty(
+    db: Session,
+    faculty: User,
+    student_id: int,
+    today: date | None = None,
+) -> FacultyStudentProgressOut | None:
+    """Return detailed progress for an assigned student only."""
+    student = db.scalar(
+        select(User).where(
+            User.id == student_id,
+            User.role == Role.STUDENT,
+            User.advisor_id == faculty.id,
+        )
+    )
+
+    # This is also the authorization check.
+    # A faculty member cannot view another advisor's student.
+    if student is None:
+        return None
+
+    today = today or datetime.now(
+        ZoneInfo("America/New_York")
+    ).date()
+
+    milestones = list(
+        db.scalars(
+            select(Milestone).order_by(
+                Milestone.position,
+                Milestone.id,
+            )
+        )
+    )
+
+    progress_rows = list(
+        db.scalars(
+            select(StudentMilestone).where(
+                StudentMilestone.student_id == student.id
+            )
+        )
+    )
+
+    progress_by_milestone = {
+        row.milestone_id: row
+        for row in progress_rows
+    }
+
+    completed = sum(
+        row.status == MilestoneStatus.APPROVED
+        for row in progress_rows
+    )
+
+    total = len(milestones)
+    remaining = max(
+        0,
+        total - completed,
+    )
+
+    progress_percent = (
+        round(completed * 100 / total)
+        if total
+        else 0
+    )
+
+    milestone_outputs = []
+
+    for milestone in milestones:
+        progress = progress_by_milestone.get(
+            milestone.id
+        )
+
+        milestone_outputs.append(
+            StudentMilestoneDetailOut(
+                milestone_id=milestone.id,
+                milestone_name=milestone.name,
+                position=milestone.position,
+                status=(
+                    progress.status
+                    if progress is not None
+                    else MilestoneStatus.NOT_STARTED
+                ),
+                completed_on=(
+                    progress.completed_on
+                    if progress is not None
+                    else None
+                ),
+            )
+        )
+
+    return FacultyStudentProgressOut(
+        student_id=student.id,
+        student_name=student.full_name,
+        email=student.email,
+        program_year=_get_program_year(
+            student,
+            today,
+        ),
+        completed_milestones=completed,
+        total_milestones=total,
+        remaining_milestones=remaining,
+        progress_percent=progress_percent,
+        milestones=milestone_outputs,
+    )
     

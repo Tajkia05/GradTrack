@@ -1,55 +1,130 @@
 // App.jsx — THE MAP OF ALL PAGES.
-// Each <Route> says: "when the URL is X, show page Y".
-// To add a new page: create the page file, import it here, and add a <Route>
-// inside the matching role's ProtectedRoute block.
+// Each <Route> says which page should appear for a URL.
+// Role-specific pages stay inside their matching ProtectedRoute.
 
-import { Navigate, Route, Routes } from "react-router-dom";
+import {
+  Navigate,
+  Route,
+  Routes,
+} from "react-router-dom";
+
 import ProtectedRoute from "./auth/ProtectedRoute.jsx";
 import AuthShell from "./components/AuthShell.jsx";
 import Layout from "./components/Layout.jsx";
+
 import Login from "./pages/Login.jsx";
 import Register from "./pages/Register.jsx";
+
 import StudentDashboard from "./pages/student/StudentDashboard.jsx";
-// The page where a student views and edits their profile.
 import StudentProfile from "./pages/student/StudentProfile.jsx";
+
 import FacultyDashboard from "./pages/faculty/FacultyDashboard.jsx";
+import FacultyProfile from "./pages/faculty/FacultyProfile.jsx";
+import StudentProgress from "./pages/faculty/StudentProgress.jsx";
+
 import DirectorDashboard from "./pages/director/DirectorDashboard.jsx";
+
 
 export default function App() {
   return (
     <Routes>
-      {/* Login and Register pages — open to everyone, NO navbar.
-          They sit inside AuthShell: the lamp screen. Turn the lamp on to see the form. */}
+      {/*
+        Login and Register are public pages.
+        They use AuthShell and do not show the main navbar.
+      */}
       <Route element={<AuthShell />}>
-        <Route path="/login" element={<Login />} />
-        <Route path="/register" element={<Register />} />
+        <Route
+          path="/login"
+          element={<Login />}
+        />
+
+        <Route
+          path="/register"
+          element={<Register />}
+        />
       </Route>
 
-      {/* Everything below needs the user to be logged in... */}
+
+      {/* Everything below requires authentication. */}
       <Route element={<ProtectedRoute />}>
-        {/* ...and gets the navbar from Layout. */}
+        {/* Logged-in pages use the shared navbar/layout. */}
         <Route element={<Layout />}>
+
+
           {/* Student-only pages */}
-          <Route element={<ProtectedRoute role="student" />}>
-            <Route path="/student" element={<StudentDashboard />} />
-            {/* When the URL is /student/profile, show the student's profile. */}
-            <Route path="/student/profile" element={<StudentProfile />} />
+          <Route
+            element={
+              <ProtectedRoute role="student" />
+            }
+          >
+            <Route
+              path="/student"
+              element={<StudentDashboard />}
+            />
+
+            <Route
+              path="/student/profile"
+              element={<StudentProfile />}
+            />
           </Route>
+
 
           {/* Faculty-only pages */}
-          <Route element={<ProtectedRoute role="faculty" />}>
-            <Route path="/faculty" element={<FacultyDashboard />} />
+          <Route
+            element={
+              <ProtectedRoute role="faculty" />
+            }
+          >
+            {/* Faculty dashboard */}
+            <Route
+              path="/faculty"
+              element={<FacultyDashboard />}
+            />
+
+            {/* Faculty member's own profile */}
+            <Route
+              path="/faculty/profile"
+              element={<FacultyProfile />}
+            />
+
+            {/*
+              Detailed progress for one of the
+              faculty member's assigned students.
+            */}
+            <Route
+              path="/faculty/students/:studentId/progress"
+              element={<StudentProgress />}
+            />
           </Route>
 
+
           {/* Program-director-only pages */}
-          <Route element={<ProtectedRoute role="program_director" />}>
-            <Route path="/program_director" element={<DirectorDashboard />} />
+          <Route
+            element={
+              <ProtectedRoute role="program_director" />
+            }
+          >
+            <Route
+              path="/program_director"
+              element={<DirectorDashboard />}
+            />
           </Route>
+
+
         </Route>
       </Route>
 
-      {/* Any unknown URL → send the user to the login page. */}
-      <Route path="*" element={<Navigate to="/login" replace />} />
+
+      {/* Unknown URLs return to login. */}
+      <Route
+        path="*"
+        element={
+          <Navigate
+            to="/login"
+            replace
+          />
+        }
+      />
     </Routes>
   );
 }
