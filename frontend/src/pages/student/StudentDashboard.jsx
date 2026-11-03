@@ -20,7 +20,7 @@ const STATUS_LABELS = {
 };
 
 const SECTIONS = [
-  { key: "current", title: "Current", description: "The milestones you’re working on now." },
+  { key: "current", title: "Ongoing", description: "The milestones you’re working on now." },
   { key: "blocked", title: "Blocked", description: "Complete these prerequisites to move forward." },
   { key: "upcoming", title: "Available", description: "Ready when you are — your next steps." },
   { key: "completed", title: "Completed" },
@@ -179,7 +179,7 @@ export default function StudentDashboard() {
           <div className="h-full rounded-full bg-sage" style={{ width: `${summary.percent}%` }} />
         </div>
         <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm text-mist/65">
-          {["completed", "current", "upcoming", "blocked"].map((key) => <span key={key}><strong className={key === "completed" ? "text-sage" : "text-white"}>{summary[key]}</strong> {key === "upcoming" ? "available" : key}</span>)}
+          {["completed", "current", "upcoming", "blocked"].map((key) => <span key={key}><strong className={key === "completed" ? "text-sage" : "text-white"}>{summary[key]}</strong> {key === "upcoming" ? "available" : key === "current" ? "ongoing" : key}</span>)}
         </div>
         <p className="mt-4 text-xs leading-relaxed text-mist/50">{student.enrollment_status === "part_time" ? "Part-time deadlines are doubled; defense is capped at 8 years. " : ""}Deadlines are shown by academic semester.</p>
       </section>
@@ -201,8 +201,8 @@ export default function StudentDashboard() {
                   : "border-line text-mist/65 hover:border-sage/40 hover:text-white"
               }`}
             >
-              {/* Students see "Available" for milestones they can start, which the API calls "upcoming". */}
-              {key === "all" ? "All" : key === "upcoming" ? "Available" : key.charAt(0).toUpperCase() + key.slice(1)}
+              {/* Students see "Ongoing" and "Available", which the API calls "current" and "upcoming". */}
+              {key === "all" ? "All" : key === "upcoming" ? "Available" : key === "current" ? "Ongoing" : key.charAt(0).toUpperCase() + key.slice(1)}
               <span className="ml-2 text-xs opacity-70">{count}</span>
             </button>
           );
