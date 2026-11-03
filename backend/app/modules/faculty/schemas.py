@@ -1,4 +1,6 @@
-"""Read-only faculty dashboard response models."""
+"""Faculty dashboard, milestone review, and committee response models."""
+
+from datetime import date
 
 from pydantic import BaseModel
 
@@ -41,3 +43,23 @@ class FacultyDashboardOut(BaseModel):
 
 class MilestoneReviewRequest(BaseModel):
     status: MilestoneStatus
+    comment: str | None = None
+
+
+class CommitteeInvitationOut(BaseModel):
+    id: int
+    student_id: int
+    student_name: str
+    invited_on: date
+
+
+class CommitteeInvitationResponse(BaseModel):
+    status: str
+
+
+class CommitteeMembershipOut(BaseModel):
+    id: int
+    student_id: int
+    student_name: str
+    invited_on: date
+    
