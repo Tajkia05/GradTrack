@@ -8,12 +8,15 @@ from app.core.deps import require_role
 from app.modules.faculty.schemas import (
     CommitteeInvitationOut,
     CommitteeInvitationResponse,
+    CommitteeMembershipOut,
     FacultyDashboardOut,
     MilestoneReviewRequest,
 )
 from app.modules.faculty.service import (
+    get_committee_memberships,
     get_faculty_dashboard,
     get_pending_committee_invitations,
+    leave_committee,
     respond_to_committee_invitation,
     review_student_milestone,
 )
@@ -24,7 +27,10 @@ from app.modules.users.models import Role, User
 router = APIRouter(tags=["Faculty"])
 
 
-@router.get("/faculty/me/dashboard", response_model=FacultyDashboardOut)
+@router.get(
+    "/faculty/me/dashboard",
+    response_model=FacultyDashboardOut,
+)
 def my_dashboard(
     faculty: User = Depends(require_role(Role.FACULTY)),
     db: Session = Depends(get_db),
@@ -32,7 +38,9 @@ def my_dashboard(
     return get_faculty_dashboard(db, faculty)
 
 
-@router.patch("/faculty/students/{student_id}/milestones/{milestone_id}")
+@router.patch(
+    "/faculty/students/{student_id}/milestones/{milestone_id}"
+)
 def review_milestone(
     student_id: int,
     milestone_id: int,
@@ -58,12 +66,16 @@ def review_milestone(
         student_id,
         milestone_id,
         body.status,
+        body.comment,
     )
 
     if progress is None:
         raise HTTPException(
             status_code=404,
-            detail="Reviewable milestone not found for this faculty member",
+            detail=(
+                "Reviewable milestone not found "
+                "for this faculty member"
+            ),
         )
 
     return {
@@ -82,10 +94,15 @@ def my_committee_invitations(
     faculty: User = Depends(require_role(Role.FACULTY)),
     db: Session = Depends(get_db),
 ):
-    return get_pending_committee_invitations(db, faculty)
+    return get_pending_committee_invitations(
+        db,
+        faculty,
+    )
 
 
-@router.patch("/faculty/committee-invitations/{invitation_id}")
+@router.patch(
+    "/faculty/committee-invitations/{invitation_id}"
+)
 def respond_to_invitation(
     invitation_id: int,
     body: CommitteeInvitationResponse,
@@ -95,7 +112,10 @@ def respond_to_invitation(
     if body.status not in {"approved", "declined"}:
         raise HTTPException(
             status_code=400,
-            detail="Committee invitation can only be approved or declined",
+            detail=(
+                "Committee invitation can only "
+                "be approved or declined"
+            ),
         )
 
     invitation = respond_to_committee_invitation(
@@ -118,5 +138,47 @@ def respond_to_invitation(
         "id": invitation.id,
         "student_id": invitation.student_id,
         "status": invitation.status,
+    }
+
+
+@router.get(
+    "/faculty/me/committee-memberships",
+    response_model=list[CommitteeMembershipOut],
+)
+def my_committee_memberships(
+    faculty: User = Depends(require_role(Role.FACULTY)),
+    db: Session = Depends(get_db),
+):
+    return get_committee_memberships(
+        db,
+        faculty,
+    )
+
+
+@router.delete(
+    "/faculty/committee-memberships/{membership_id}"
+)
+def leave_committee_membership(
+    membership_id: int,
+    faculty: User = Depends(require_role(Role.FACULTY)),
+    db: Session = Depends(get_db),
+):
+    removed = leave_committee(
+        db,
+        faculty,
+        membership_id,
+    )
+
+    if not removed:
+        raise HTTPException(
+            status_code=404,
+            detail=(
+                "Approved committee membership not found "
+                "for this faculty member."
+            ),
+        )
+
+    return {
+        "message": "You have left the dissertation committee."
     }
     

@@ -1,4 +1,4 @@
-"""Build the read-only faculty dashboard from existing student and milestone data."""
+"""Build the faculty dashboard and handle faculty review actions."""
 
 from datetime import date, datetime
 from zoneinfo import ZoneInfo
@@ -10,6 +10,7 @@ from app.modules.committee.models import CommitteeMember
 from app.modules.faculty.schemas import (
     AssignedStudentOut,
     CommitteeInvitationOut,
+    CommitteeMembershipOut,
     FacultyDashboardOut,
     FacultyProfile,
     FacultySummary,
@@ -20,8 +21,8 @@ from app.modules.milestones.models import (
     MilestoneStatus,
     StudentMilestone,
 )
+from app.modules.notifications.models import Notification
 from app.modules.student.service import semester_index
-# Records a status change with its exact time, and tells the student.
 from app.modules.submissions.history import record_status_change
 from app.modules.users.models import Role, Term, User
 
@@ -38,7 +39,10 @@ def get_faculty_dashboard(
     faculty: User,
     today: date | None = None,
 ) -> FacultyDashboardOut:
-    today = today or datetime.now(ZoneInfo("America/New_York")).date()
+    today = today or datetime.now(
+        ZoneInfo("America/New_York")
+    ).date()
+
     now = semester_index(today)
 
     students = list(
@@ -54,7 +58,10 @@ def get_faculty_dashboard(
 
     milestones = list(
         db.scalars(
-            select(Milestone).order_by(Milestone.position, Milestone.id)
+            select(Milestone).order_by(
+                Milestone.position,
+                Milestone.id,
+            )
         )
     )
 
@@ -125,7 +132,9 @@ def get_faculty_dashboard(
             if row.status not in REVIEW_STATUSES:
                 continue
 
-            milestone = milestone_by_id.get(row.milestone_id)
+            milestone = milestone_by_id.get(
+                row.milestone_id
+            )
 
             if milestone is None:
                 continue
@@ -160,8 +169,10 @@ def review_student_milestone(
     student_id: int,
     milestone_id: int,
     new_status: MilestoneStatus,
+    comment: str | None = None,
 ) -> StudentMilestone | None:
-    # Faculty can only review milestones for students assigned to them.
+    # Faculty can only review milestones for students
+    # assigned to them.
     student = db.scalar(
         select(User).where(
             User.id == student_id,
@@ -180,7 +191,10 @@ def review_student_milestone(
         )
     )
 
-    if progress is None or progress.status not in REVIEW_STATUSES:
+    if (
+        progress is None
+        or progress.status not in REVIEW_STATUSES
+    ):
         return None
 
     progress.status = new_status
@@ -192,8 +206,16 @@ def review_student_milestone(
     else:
         progress.completed_on = None
 
-    # Record who decided and when, and tell the student.
-    record_status_change(db, student_id, milestone_id, new_status, faculty.id)
+    # Keep a history of the faculty decision,
+    # save the optional comment, and notify the student.
+    record_status_change(
+        db,
+        student_id,
+        milestone_id,
+        new_status,
+        faculty.id,
+        comment,
+    )
 
     db.commit()
     db.refresh(progress)
@@ -207,7 +229,10 @@ def get_pending_committee_invitations(
 ) -> list[CommitteeInvitationOut]:
     rows = db.execute(
         select(CommitteeMember, User)
-        .join(User, User.id == CommitteeMember.student_id)
+        .join(
+            User,
+            User.id == CommitteeMember.student_id,
+        )
         .where(
             CommitteeMember.faculty_id == faculty.id,
             CommitteeMember.status == "pending",
@@ -247,7 +272,92 @@ def respond_to_committee_invitation(
 
     invitation.status = new_status
 
+    # Tell the student whether the faculty member
+    # accepted or declined the invitation.
+    action = (
+        "accepted"
+        if new_status == "approved"
+        else "declined"
+    )
+
+    db.add(
+        Notification(
+            user_id=invitation.student_id,
+            message=(
+                f"{faculty.full_name} {action} your "
+                "dissertation committee invitation."
+            ),
+        )
+    )
+
     db.commit()
     db.refresh(invitation)
 
     return invitation
+
+
+def get_committee_memberships(
+    db: Session,
+    faculty: User,
+) -> list[CommitteeMembershipOut]:
+    """Return committees the faculty member has joined."""
+    rows = db.execute(
+        select(CommitteeMember, User)
+        .join(
+            User,
+            User.id == CommitteeMember.student_id,
+        )
+        .where(
+            CommitteeMember.faculty_id == faculty.id,
+            CommitteeMember.status == "approved",
+        )
+        .order_by(CommitteeMember.id)
+    ).all()
+
+    return [
+        CommitteeMembershipOut(
+            id=membership.id,
+            student_id=student.id,
+            student_name=student.full_name,
+            invited_on=membership.invited_on,
+        )
+        for membership, student in rows
+    ]
+
+
+def leave_committee(
+    db: Session,
+    faculty: User,
+    membership_id: int,
+) -> bool:
+    """Remove faculty from one of their approved committees."""
+    membership = db.scalar(
+        select(CommitteeMember).where(
+            CommitteeMember.id == membership_id,
+            CommitteeMember.faculty_id == faculty.id,
+            CommitteeMember.status == "approved",
+        )
+    )
+
+    if membership is None:
+        return False
+
+    student_id = membership.student_id
+
+    # Notify the student that this faculty member
+    # has left their dissertation committee.
+    db.add(
+        Notification(
+            user_id=student_id,
+            message=(
+                f"{faculty.full_name} left your "
+                "dissertation committee."
+            ),
+        )
+    )
+
+    db.delete(membership)
+    db.commit()
+
+    return True
+    

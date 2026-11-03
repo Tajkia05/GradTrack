@@ -19,6 +19,8 @@ from app.modules.milestones.models import (
     MilestoneStatus,
     StudentMilestone,
 )
+from app.modules.notifications.models import Notification
+from app.modules.submissions.models import MilestoneStatusHistory
 from app.modules.users.models import (
     EnrollmentStatus,
     Role,
@@ -375,6 +377,50 @@ class FacultyDashboardTests(unittest.TestCase):
             400,
         )
 
+    def test_review_comment_is_saved_in_history(self):
+        comment = "Please address the committee feedback."
+
+        response = self.client.patch(
+            "/api/faculty/students/4/milestones/2",
+            headers=self.headers(self.faculty),
+            json={
+                "status": "revision_requested",
+                "comment": comment,
+            },
+        )
+
+        self.assertEqual(
+            response.status_code,
+            200,
+        )
+
+        history = self.db.scalar(
+            select(MilestoneStatusHistory)
+            .where(
+                MilestoneStatusHistory.student_id == 4,
+                MilestoneStatusHistory.milestone_id == 2,
+            )
+            .order_by(MilestoneStatusHistory.id.desc())
+        )
+
+        self.assertIsNotNone(history)
+
+        self.assertEqual(
+            history.comment,
+            comment,
+        )
+
+        notification = self.db.scalar(
+            select(Notification)
+            .where(
+                Notification.user_id == self.student.id,
+                Notification.message.contains(comment),
+            )
+            .order_by(Notification.id.desc())
+        )
+
+        self.assertIsNotNone(notification)
+
     def test_faculty_sees_own_pending_committee_invitation(self):
         invitation = CommitteeMember(
             student_id=self.other_student.id,
@@ -480,6 +526,23 @@ class FacultyDashboardTests(unittest.TestCase):
             "approved",
         )
 
+        notification = self.db.scalar(
+            select(Notification).where(
+                Notification.user_id
+                == self.other_student.id
+            )
+        )
+
+        self.assertIsNotNone(notification)
+
+        self.assertEqual(
+            notification.message,
+            (
+                "Dr. Faculty accepted your "
+                "dissertation committee invitation."
+            ),
+        )
+
     def test_faculty_can_decline_committee_invitation(self):
         invitation = CommitteeMember(
             student_id=self.other_student.id,
@@ -507,6 +570,23 @@ class FacultyDashboardTests(unittest.TestCase):
         self.assertEqual(
             response.json()["status"],
             "declined",
+        )
+
+        notification = self.db.scalar(
+            select(Notification).where(
+                Notification.user_id
+                == self.other_student.id
+            )
+        )
+
+        self.assertIsNotNone(notification)
+
+        self.assertEqual(
+            notification.message,
+            (
+                "Dr. Faculty declined your "
+                "dissertation committee invitation."
+            ),
         )
 
     def test_faculty_cannot_answer_other_faculty_invitation(self):
@@ -618,6 +698,277 @@ class FacultyDashboardTests(unittest.TestCase):
             response.status_code,
             400,
         )
+
+    def test_faculty_sees_approved_committee_membership(self):
+        membership = CommitteeMember(
+            student_id=self.other_student.id,
+            faculty_id=self.faculty.id,
+            status="approved",
+            invited_on=date(2026, 11, 1),
+        )
+
+        self.db.add(membership)
+        self.db.commit()
+
+        response = self.client.get(
+            "/api/faculty/me/committee-memberships",
+            headers=self.headers(self.faculty),
+        )
+
+        self.assertEqual(
+            response.status_code,
+            200,
+        )
+
+        memberships = response.json()
+
+        self.assertEqual(
+            len(memberships),
+            1,
+        )
+
+        self.assertEqual(
+            memberships[0]["student_id"],
+            self.other_student.id,
+        )
+
+        self.assertEqual(
+            memberships[0]["student_name"],
+            "Other Student",
+        )
+
+        self.assertEqual(
+            memberships[0]["invited_on"],
+            "2026-11-01",
+        )
+
+    def test_pending_invitation_is_not_committee_membership(self):
+        invitation = CommitteeMember(
+            student_id=self.other_student.id,
+            faculty_id=self.faculty.id,
+            status="pending",
+            invited_on=date(2026, 11, 1),
+        )
+
+        self.db.add(invitation)
+        self.db.commit()
+
+        response = self.client.get(
+            "/api/faculty/me/committee-memberships",
+            headers=self.headers(self.faculty),
+        )
+
+        self.assertEqual(
+            response.status_code,
+            200,
+        )
+
+        self.assertEqual(
+            response.json(),
+            [],
+        )
+
+    def test_other_faculty_membership_is_hidden(self):
+        membership = CommitteeMember(
+            student_id=self.student.id,
+            faculty_id=self.other_faculty.id,
+            status="approved",
+            invited_on=date(2026, 11, 1),
+        )
+
+        self.db.add(membership)
+        self.db.commit()
+
+        response = self.client.get(
+            "/api/faculty/me/committee-memberships",
+            headers=self.headers(self.faculty),
+        )
+
+        self.assertEqual(
+            response.status_code,
+            200,
+        )
+
+        self.assertEqual(
+            response.json(),
+            [],
+        )
+
+    def test_faculty_can_leave_approved_committee(self):
+        membership = CommitteeMember(
+            student_id=self.other_student.id,
+            faculty_id=self.faculty.id,
+            status="approved",
+            invited_on=date(2026, 11, 1),
+        )
+
+        self.db.add(membership)
+        self.db.commit()
+
+        membership_id = membership.id
+        student_id = self.other_student.id
+
+        response = self.client.delete(
+            f"/api/faculty/committee-memberships/{membership_id}",
+            headers=self.headers(self.faculty),
+        )
+
+        self.assertEqual(
+            response.status_code,
+            200,
+        )
+
+        self.assertEqual(
+            response.json()["message"],
+            "You have left the dissertation committee.",
+        )
+
+        self.db.expire_all()
+
+        saved = self.db.get(
+            CommitteeMember,
+            membership_id,
+        )
+
+        self.assertIsNone(saved)
+
+        notification = self.db.scalar(
+            select(Notification)
+            .where(
+                Notification.user_id == student_id,
+                Notification.message.contains(
+                    "left your dissertation committee"
+                ),
+            )
+            .order_by(Notification.id.desc())
+        )
+
+        self.assertIsNotNone(notification)
+
+        self.assertEqual(
+            notification.message,
+            (
+                "Dr. Faculty left your "
+                "dissertation committee."
+            ),
+        )
+
+    def test_faculty_cannot_leave_other_faculty_membership(self):
+        membership = CommitteeMember(
+            student_id=self.student.id,
+            faculty_id=self.other_faculty.id,
+            status="approved",
+            invited_on=date(2026, 11, 1),
+        )
+
+        self.db.add(membership)
+        self.db.commit()
+
+        membership_id = membership.id
+
+        response = self.client.delete(
+            f"/api/faculty/committee-memberships/{membership_id}",
+            headers=self.headers(self.faculty),
+        )
+
+        self.assertEqual(
+            response.status_code,
+            404,
+        )
+
+        self.db.expire_all()
+
+        saved = self.db.get(
+            CommitteeMember,
+            membership_id,
+        )
+
+        self.assertIsNotNone(saved)
+
+        self.assertEqual(
+            saved.status,
+            "approved",
+        )
+
+    def test_faculty_cannot_leave_pending_invitation(self):
+        invitation = CommitteeMember(
+            student_id=self.other_student.id,
+            faculty_id=self.faculty.id,
+            status="pending",
+            invited_on=date(2026, 11, 1),
+        )
+
+        self.db.add(invitation)
+        self.db.commit()
+
+        invitation_id = invitation.id
+
+        response = self.client.delete(
+            f"/api/faculty/committee-memberships/{invitation_id}",
+            headers=self.headers(self.faculty),
+        )
+
+        self.assertEqual(
+            response.status_code,
+            404,
+        )
+
+        self.db.expire_all()
+
+        saved = self.db.get(
+            CommitteeMember,
+            invitation_id,
+        )
+
+        self.assertIsNotNone(saved)
+
+        self.assertEqual(
+            saved.status,
+            "pending",
+        )
+
+    def test_student_cannot_access_faculty_committee_memberships(self):
+        response = self.client.get(
+            "/api/faculty/me/committee-memberships",
+            headers=self.headers(self.student),
+        )
+
+        self.assertEqual(
+            response.status_code,
+            403,
+        )
+
+    def test_student_cannot_leave_faculty_committee_membership(self):
+        membership = CommitteeMember(
+            student_id=self.other_student.id,
+            faculty_id=self.faculty.id,
+            status="approved",
+            invited_on=date(2026, 11, 1),
+        )
+
+        self.db.add(membership)
+        self.db.commit()
+
+        membership_id = membership.id
+
+        response = self.client.delete(
+            f"/api/faculty/committee-memberships/{membership_id}",
+            headers=self.headers(self.student),
+        )
+
+        self.assertEqual(
+            response.status_code,
+            403,
+        )
+
+        self.db.expire_all()
+
+        saved = self.db.get(
+            CommitteeMember,
+            membership_id,
+        )
+
+        self.assertIsNotNone(saved)
 
 
 if __name__ == "__main__":
