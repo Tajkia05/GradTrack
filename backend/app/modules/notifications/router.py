@@ -3,12 +3,12 @@
 # datetime is when a notification was created.
 from datetime import datetime
 
-# APIRouter groups these endpoints, and Depends supplies what each endpoint needs.
-from fastapi import APIRouter, Depends
+# APIRouter groups these endpoints, Depends supplies what each endpoint needs, and HTTPException sends an error.
+from fastapi import APIRouter, Depends, HTTPException
 # BaseModel describes the data, and ConfigDict sets options.
 from pydantic import BaseModel, ConfigDict
-# select builds database queries, and update changes many rows at once.
-from sqlalchemy import select, update
+# select builds database queries.
+from sqlalchemy import select
 # Session is one conversation with the database.
 from sqlalchemy.orm import Session
 
@@ -58,17 +58,25 @@ def my_notifications(
                            .order_by(Notification.id.desc())))
 
 
-# POST /api/notifications/me/read — mark all of the logged-in user's notifications as read.
-@router.post("/notifications/me/read", status_code=204)
+# POST /api/notifications/5/read — mark one of the logged-in user's notifications as read.
+@router.post("/notifications/{notification_id}/read", status_code=204)
 # This function runs when that URL is requested.
-def mark_my_notifications_read(
+def mark_notification_read(
+    # The notification's id, taken from the URL.
+    notification_id: int,
     # Any logged-in user can use this, and the user comes from their login token.
     user: User = Depends(get_current_user),
     # Open a database session for this request.
     db: Session = Depends(get_db),
 # End of the inputs.
 ):
-    # Mark only this user's unread notifications.
-    db.execute(update(Notification).where(Notification.user_id == user.id, Notification.is_read.is_(False)).values(is_read=True))
+    # Find it, only if it belongs to this user.
+    notification = db.scalar(select(Notification).where(Notification.id == notification_id, Notification.user_id == user.id))
+    # Stop if it doesn't, so nobody can change someone else's.
+    if notification is None:
+        # 404 means not found.
+        raise HTTPException(404, "Notification not found.")
+    # Mark it as read.
+    notification.is_read = True
     # Save the change.
     db.commit()

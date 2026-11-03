@@ -244,6 +244,36 @@ class SubmissionTests(unittest.TestCase):
         # Her newest notification opens the exam's card.
         self.assertEqual(self.bell(self.lisa)[0]["link"], f"/student?milestone={EXAM}")
 
+    # Clicking one notification marks only that one as read.
+    def test_marking_one_notification_read(self):
+        # Lisa submits, and her advisor requests a revision, then she resubmits, and they request another.
+        self.submit()
+        # The first revision request.
+        self.review("revision_requested")
+        # She resubmits.
+        self.submit(upload("v2.pdf"))
+        # The second revision request.
+        self.review("revision_requested")
+        # Lisa has two notifications, newest first.
+        first, second = self.bell(self.lisa)
+        # She clicks the newest.
+        self.assertEqual(self.client.post(f"/api/notifications/{first['id']}/read", headers=self.headers(self.lisa)).status_code, 204)
+        # Read them again.
+        after = {item["id"]: item["is_read"] for item in self.bell(self.lisa)}
+        # Only that one is read.
+        self.assertEqual((after[first["id"]], after[second["id"]]), (True, False))
+
+    # Nobody can mark someone else's notification as read.
+    def test_cannot_mark_someone_elses_notification_read(self):
+        # Lisa submits, which notifies her advisor.
+        self.submit()
+        # Find the advisor's notification.
+        notification = self.bell(self.faculty)[0]
+        # Lisa's attempt isn't found.
+        self.assertEqual(self.client.post(f"/api/notifications/{notification['id']}/read", headers=self.headers(self.lisa)).status_code, 404)
+        # It's still unread.
+        self.assertFalse(self.bell(self.faculty)[0]["is_read"])
+
     # The advisor isn't notified about their own decisions.
     def test_advisor_is_not_notified_about_their_own_decision(self):
         # Lisa submits, which tells the advisor once.
@@ -306,17 +336,6 @@ class SubmissionTests(unittest.TestCase):
         entry = self.page().json()["history"][0]
         # Check the status and the name.
         self.assertEqual((entry["status"], entry["changed_by"]), ("revision_requested", "Faculty"))
-
-    # Marking notifications as read only affects the logged-in user.
-    def test_marking_read_only_affects_that_user(self):
-        # Lisa submits, which notifies her and her advisor.
-        self.submit()
-        # Lisa marks hers as read.
-        self.assertEqual(self.client.post("/api/notifications/me/read", headers=self.headers(self.lisa)).status_code, 204)
-        # Hers are read.
-        self.assertTrue(all(item["is_read"] for item in self.client.get("/api/notifications/me", headers=self.headers(self.lisa)).json()))
-        # Her advisor's are still unread.
-        self.assertFalse(any(item["is_read"] for item in self.client.get("/api/notifications/me", headers=self.headers(self.faculty)).json()))
 
     # Only the listed file types are allowed.
     def test_other_file_types_are_refused(self):

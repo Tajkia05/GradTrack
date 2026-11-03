@@ -1,5 +1,6 @@
 // NotificationBell.jsx — THE BELL IN THE NAVBAR, WITH THE UNREAD COUNT AND THE LIST OF NOTIFICATIONS.
 // It's in the shared navbar, so students, faculty and the director all have it.
+// A notification stays unread until it's clicked, which grays it out and opens its page.
 
 // useEffect runs code on a timer, and useState remembers values on the page.
 import { useEffect, useState } from "react";
@@ -19,7 +20,7 @@ export default function NotificationBell() {
   const [open, setOpen] = useState(false);
   // Opens the page a notification points to.
   const navigate = useNavigate();
-  // How many haven't been read.
+  // How many haven't been clicked yet.
   const unread = notifications.filter((notification) => !notification.is_read).length;
 
   // Load the notifications now, then keep checking.
@@ -38,18 +39,19 @@ export default function NotificationBell() {
   // The empty list means this only starts once.
   }, []);
 
-  // Opens or closes the list, and marks everything as read when it opens.
-  function toggle() {
-    // Show or hide the list.
-    setOpen((current) => !current);
-    // Nothing to mark if it's closing or nothing is unread.
-    if (open || unread === 0) return;
-    // Tell the backend. This reply has no content, so it uses fetch directly.
-    fetch("/api/notifications/me/read", { method: "POST", headers: { Authorization: `Bearer ${getToken()}` } })
-      // Once saved, clear the unread count on the page.
-      .then((response) => { if (response.ok) setTimeout(() => setNotifications((current) => current.map((notification) => ({ ...notification, is_read: true }))), 3000); })
-      // A failed save isn't worth interrupting the page, so they stay unread.
-      .catch(() => {});
+  // Runs when a notification is clicked.
+  function select(notification) {
+    // Close the list.
+    setOpen(false);
+    // Gray it out and lower the count right away.
+    setNotifications((current) => current.map((item) => (item.id === notification.id ? { ...item, is_read: true } : item)));
+    // Save it, unless it's already read. This reply has no content, so it uses fetch directly.
+    if (!notification.is_read) {
+      // A failed save isn't worth interrupting the page, so it just shows as unread on the next check.
+      fetch(`/api/notifications/${notification.id}/read`, { method: "POST", headers: { Authorization: `Bearer ${getToken()}` } }).catch(() => {});
+    }
+    // Open its page, if it has one.
+    if (notification.link) navigate(notification.link);
   }
 
   // Draw the bell and the list.
@@ -57,7 +59,7 @@ export default function NotificationBell() {
     // "relative" lets the list sit just under the bell.
     <div className="relative">
       {/* The bell, which also tells screen readers the unread count. */}
-      <button type="button" onClick={toggle} aria-expanded={open} aria-label={`Notifications, ${unread} unread`} className="relative rounded-lg border border-line px-2.5 py-1 text-mist transition-colors hover:border-sage hover:text-white">
+      <button type="button" onClick={() => setOpen((current) => !current)} aria-expanded={open} aria-label={`Notifications, ${unread} unread`} className="relative rounded-lg border border-line px-2.5 py-1 text-mist transition-colors hover:border-sage hover:text-white">
         {/* The bell icon, as a character. */}
         <span aria-hidden="true">🔔</span>
         {/* The unread count, only when there are some. */}
@@ -73,26 +75,15 @@ export default function NotificationBell() {
           <ul className="divide-y divide-line">
             {/* One row for each notification. */}
             {notifications.map((notification) => (
-              // Unread ones are slightly highlighted.
-              <li key={notification.id} className={`text-sm ${notification.is_read ? "text-mist/70" : "bg-sage/10 text-white"}`}>
-                {/* A notification with a link is a button that opens it. Older ones with no link are plain text. */}
-                {notification.link ? (
-                  // Clicking closes the list and opens the page.
-                  <button type="button" onClick={() => { setOpen(false); navigate(notification.link); }} className="block w-full p-3 text-left transition-colors hover:bg-sage/15">
-                    {/* The message. */}
-                    <span className="block">{notification.message}</span>
-                    {/* When it was created. */}
-                    <span className="mt-1 block text-xs text-mist/50">{new Intl.DateTimeFormat("en-US", { dateStyle: "medium", timeStyle: "short" }).format(new Date(notification.created_at))}</span>
-                  </button>
-                ) : (
-                  // The plain version.
-                  <div className="p-3">
-                    {/* The message. */}
-                    <p>{notification.message}</p>
-                    {/* When it was created. */}
-                    <p className="mt-1 text-xs text-mist/50">{new Intl.DateTimeFormat("en-US", { dateStyle: "medium", timeStyle: "short" }).format(new Date(notification.created_at))}</p>
-                  </div>
-                )}
+              // Clicked ones are grayed out. Unread ones are bright, with a soft background.
+              <li key={notification.id} className={`text-sm ${notification.is_read ? "text-mist/50" : "bg-sage/10 font-medium text-white"}`}>
+                {/* Clicking marks it as read and opens its page. */}
+                <button type="button" onClick={() => select(notification)} className="block w-full p-3 text-left transition-colors hover:bg-sage/15">
+                  {/* The message. */}
+                  <span className="block">{notification.message}</span>
+                  {/* When it was created. */}
+                  <span className={`mt-1 block text-xs font-normal ${notification.is_read ? "text-mist/40" : "text-mist"}`}>{new Intl.DateTimeFormat("en-US", { dateStyle: "medium", timeStyle: "short" }).format(new Date(notification.created_at))}</span>
+                </button>
               </li>
             ))}
           </ul>

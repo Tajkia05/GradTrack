@@ -5,6 +5,8 @@ import { useEffect, useRef, useState } from "react";
 // useLocation reads which item a notification opened.
 import { useLocation } from "react-router-dom";
 import { api, getToken } from "../../api/client.js";
+// The app's own "are you sure?" box.
+import ConfirmDialog from "../../components/ConfirmDialog.jsx";
 
 
 const STATUS_LABELS = {
@@ -51,6 +53,9 @@ export default function FacultyDashboard() {
   const [memberships, setMemberships] = useState([]);
   const [membershipError, setMembershipError] = useState("");
   const [leavingMembership, setLeavingMembership] =
+    useState(null);
+  // The committee waiting to be confirmed for leaving. Empty when the box isn't showing.
+  const [membershipToLeave, setMembershipToLeave] =
     useState(null);
 
   // The address bar, which holds the item a notification opened.
@@ -322,14 +327,12 @@ export default function FacultyDashboard() {
   }
 
 
-  async function handleLeaveCommittee(membership) {
-    const confirmed = window.confirm(
-      `Leave ${membership.student_name}'s dissertation committee?`
-    );
-
-    if (!confirmed) {
-      return;
-    }
+  // Runs when the faculty member confirms in the box.
+  async function handleLeaveCommittee() {
+    // Remember which committee they're leaving.
+    const membership = membershipToLeave;
+    // Close the box.
+    setMembershipToLeave(null);
 
     setLeavingMembership(membership.id);
     setMembershipError("");
@@ -625,7 +628,7 @@ export default function FacultyDashboard() {
                         type="button"
                         disabled={isLeaving}
                         onClick={() =>
-                          handleLeaveCommittee(membership)
+                          setMembershipToLeave(membership)
                         }
                         className="rounded-lg border border-red-400/30 px-3 py-2 text-sm font-semibold text-red-300 hover:bg-red-400/10 disabled:cursor-not-allowed disabled:opacity-50"
                       >
@@ -959,6 +962,16 @@ export default function FacultyDashboard() {
           </p>
         )}
       </section>
+
+      {/* The "are you sure?" box, while leaving a committee is waiting to be confirmed. */}
+      {membershipToLeave && (
+        <ConfirmDialog
+          title={`Leave ${membershipToLeave.student_name}'s dissertation committee?`}
+          confirmLabel="Leave"
+          onConfirm={handleLeaveCommittee}
+          onCancel={() => setMembershipToLeave(null)}
+        />
+      )}
     </div>
   );
 }
