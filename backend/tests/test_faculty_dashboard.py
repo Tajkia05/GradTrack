@@ -970,6 +970,154 @@ class FacultyDashboardTests(unittest.TestCase):
 
         self.assertIsNotNone(saved)
 
+    # ------------------------------------------------------------------
+    # Detailed student progress
+    # ------------------------------------------------------------------
+
+    def test_faculty_can_view_assigned_student_detailed_progress(self):
+        response = self.client.get(
+            "/api/faculty/students/4/progress",
+            headers=self.headers(self.faculty),
+        )
+
+        self.assertEqual(
+            response.status_code,
+            200,
+        )
+
+        data = response.json()
+
+        self.assertEqual(
+            data["student_id"],
+            self.student.id,
+        )
+
+        self.assertEqual(
+            data["student_name"],
+            "Sam Student",
+        )
+
+        self.assertEqual(
+            data["email"],
+            "student@test.edu",
+        )
+
+        self.assertEqual(
+            data["completed_milestones"],
+            1,
+        )
+
+        self.assertEqual(
+            data["total_milestones"],
+            2,
+        )
+
+        self.assertEqual(
+            data["remaining_milestones"],
+            1,
+        )
+
+        self.assertEqual(
+            data["progress_percent"],
+            50,
+        )
+
+        self.assertEqual(
+            len(data["milestones"]),
+            2,
+        )
+
+        coursework = data["milestones"][0]
+
+        self.assertEqual(
+            coursework["milestone_id"],
+            1,
+        )
+
+        self.assertEqual(
+            coursework["milestone_name"],
+            "Coursework",
+        )
+
+        self.assertEqual(
+            coursework["position"],
+            1,
+        )
+
+        self.assertEqual(
+            coursework["status"],
+            "approved",
+        )
+
+        self.assertEqual(
+            coursework["completed_on"],
+            "2025-05-01",
+        )
+
+        comprehensive_exam = data["milestones"][1]
+
+        self.assertEqual(
+            comprehensive_exam["milestone_id"],
+            2,
+        )
+
+        self.assertEqual(
+            comprehensive_exam["milestone_name"],
+            "Comprehensive Exam",
+        )
+
+        self.assertEqual(
+            comprehensive_exam["position"],
+            2,
+        )
+
+        self.assertEqual(
+            comprehensive_exam["status"],
+            "under_review",
+        )
+
+        self.assertIsNone(
+            comprehensive_exam["completed_on"],
+        )
+
+    def test_faculty_cannot_view_other_faculty_student_progress(self):
+        response = self.client.get(
+            "/api/faculty/students/5/progress",
+            headers=self.headers(self.faculty),
+        )
+
+        self.assertEqual(
+            response.status_code,
+            404,
+        )
+
+        self.assertEqual(
+            response.json()["detail"],
+            "Student not found or not assigned to this faculty member.",
+        )
+
+    def test_student_cannot_access_faculty_student_progress(self):
+        response = self.client.get(
+            "/api/faculty/students/4/progress",
+            headers=self.headers(self.student),
+        )
+
+        self.assertEqual(
+            response.status_code,
+            403,
+        )
+
+    def test_faculty_student_progress_returns_not_found_for_missing_student(self):
+        response = self.client.get(
+            "/api/faculty/students/9999/progress",
+            headers=self.headers(self.faculty),
+        )
+
+        self.assertEqual(
+            response.status_code,
+            404,
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

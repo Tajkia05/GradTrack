@@ -63,3 +63,47 @@ class CommitteeMembershipOut(BaseModel):
     student_name: str
     invited_on: date
     
+
+class FacultyProfileOut(BaseModel):
+    full_name: str
+    email: str
+    title: str | None = None
+    department: str | None = None
+    affiliation: str | None = None
+    research_interests: str | None = None
+    lab_name: str | None = None
+    accepting_students: bool | None = None
+    academic_url: str | None = None
+    bio: str | None = None
+
+
+class FacultyProfileUpdate(BaseModel):
+    full_name: str
+    title: str | None = None
+    department: str | None = None
+    affiliation: str | None = None
+    research_interests: str | None = None
+    lab_name: str | None = None
+    accepting_students: bool | None = None
+    academic_url: str | None = None
+    bio: str | None = None
+
+
+class StudentMilestoneDetailOut(BaseModel):
+    milestone_id: int
+    milestone_name: str
+    position: int
+    status: MilestoneStatus
+    completed_on: date | None = None
+
+
+class FacultyStudentProgressOut(BaseModel):
+    student_id: int
+    student_name: str
+    email: str
+    program_year: int | None
+    completed_milestones: int
+    total_milestones: int
+    remaining_milestones: int
+    progress_percent: int
+    milestones: list[StudentMilestoneDetailOut]

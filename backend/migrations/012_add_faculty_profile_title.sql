@@ -1,0 +1,2 @@
+ALTER TABLE faculty_profiles
+ADD COLUMN IF NOT EXISTS title VARCHAR(255);
