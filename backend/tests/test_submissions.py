@@ -223,6 +223,27 @@ class SubmissionTests(unittest.TestCase):
             # The student's newest message says so.
             self.assertIn(words, self.messages(self.lisa.id)[-1])
 
+    # Returns a user's notifications from the API, newest first.
+    def bell(self, user):
+        # Read them.
+        return self.client.get("/api/notifications/me", headers=self.headers(user)).json()
+
+    # A submission takes the advisor straight to that review.
+    def test_submission_notification_links_to_the_review(self):
+        # Lisa submits.
+        self.submit()
+        # The advisor's newest notification opens her exam on the review list.
+        self.assertEqual(self.bell(self.faculty)[0]["link"], f"/faculty?student={self.lisa.id}&milestone={EXAM}")
+
+    # A decision takes the student straight to that milestone.
+    def test_decision_notification_links_to_the_milestone(self):
+        # Lisa submits.
+        self.submit()
+        # Her advisor requests a revision.
+        self.review("revision_requested")
+        # Her newest notification opens the exam's card.
+        self.assertEqual(self.bell(self.lisa)[0]["link"], f"/student?milestone={EXAM}")
+
     # The advisor isn't notified about their own decisions.
     def test_advisor_is_not_notified_about_their_own_decision(self):
         # Lisa submits, which tells the advisor once.

@@ -144,6 +144,13 @@ Valid values are `pending`, `approved` and `declined`.
 3. When they respond, notify the student by adding a `Notification` row with the
    student's id as `user_id`.
 
+## Notification links
+
+Apply `011_add_notification_links.sql` in the Neon SQL editor. It adds the `link` column
+to `notifications`, and fills in links for the notifications that already exist. Clicking
+a notification opens its `link`. New notifications get theirs from
+`app/modules/notifications/links.py`, so any new notification should set one too.
+
 ## Notifications
 
 | Event | Who is notified |

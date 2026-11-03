@@ -24,6 +24,8 @@ from app.modules.committee.schemas import CommitteeInvite, CommitteeMemberOut, C
 from app.modules.faculty.models import FacultyProfile
 # The milestone tables, used to update Committee formation.
 from app.modules.milestones.models import Milestone, MilestoneStatus, StudentMilestone
+# The page a notification opens when clicked.
+from app.modules.notifications import links
 # The notifications table.
 from app.modules.notifications.models import Notification
 # Records a status change with its exact time, and tells the student.
@@ -165,7 +167,7 @@ def invite_member(db: Session, student: User, body: CommitteeInvite) -> Committe
         # Add the invitation.
         db.add(CommitteeMember(student_id=student.id, faculty_id=person.id, invited_on=today))
         # Notify the faculty member in the app.
-        db.add(Notification(user_id=person.id, message=f"{student.full_name} invited you to join their dissertation committee."))
+        db.add(Notification(user_id=person.id, message=f"{student.full_name} invited you to join their dissertation committee.", link=links.FACULTY_INVITATIONS))
     # Otherwise, add an external member, who is approved right away.
     else:
         # External members have no account, so they can't respond and there's no notification to send.
@@ -218,7 +220,7 @@ def remove_member(db: Session, student: User, row_id: int) -> CommitteeOut:
     # Tell a faculty member they were removed. External members have no account to notify.
     if row.faculty_id is not None:
         # Add the notification to this save.
-        db.add(Notification(user_id=row.faculty_id, message=f"{student.full_name} removed you from their dissertation committee."))
+        db.add(Notification(user_id=row.faculty_id, message=f"{student.full_name} removed you from their dissertation committee.", link=links.FACULTY_MEMBERSHIPS))
     # Mark the row for deletion.
     db.delete(row)
     # Send the deletion to the database without finishing the save, so the check below can see it.

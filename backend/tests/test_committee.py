@@ -380,6 +380,17 @@ class CommitteeTests(unittest.TestCase):
         # Read the messages.
         return [row.message for row in self.db.scalars(select(Notification).where(Notification.user_id == user_id).order_by(Notification.id))]
 
+    # Each committee notification opens the right place.
+    def test_committee_notifications_have_links(self):
+        # Lisa invites Ann, and her row id is read.
+        row_id = self.invite(10).json()["members"][1]["id"]
+        # Ann's notification opens her invitations.
+        self.assertEqual(self.client.get("/api/notifications/me", headers=self.headers(self.db.get(User, 10))).json()[0]["link"], "/faculty?section=invitations")
+        # Ann approves through the faculty side.
+        self.assertEqual(self.client.patch(f"/api/faculty/committee-invitations/{row_id}", headers=self.headers(self.db.get(User, 10)), json=dict(status="approved")).status_code, 200)
+        # Lisa's notification opens Committee formation.
+        self.assertEqual(self.client.get("/api/notifications/me", headers=self.headers(self.lisa)).json()[0]["link"], f"/student?milestone={COMMITTEE_FORMATION}")
+
     # A completed committee tells the student and their advisor.
     def test_completion_notifies_student_and_advisor(self):
         # Complete the committee directly in the database.

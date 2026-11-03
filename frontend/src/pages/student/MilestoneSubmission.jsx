@@ -247,7 +247,8 @@ function SubmissionContent({ data, onUpdate }) {
 }
 
 // The button on the dashboard card, plus the popup it opens.
-export default function MilestoneSubmission({ milestoneId, milestoneName, onChanged }) {
+// openKey is set when a notification should open the popup directly.
+export default function MilestoneSubmission({ milestoneId, milestoneName, onChanged, openKey }) {
   // The data from the backend. Empty until the popup opens.
   const [data, setData] = useState(null);
   // An error message if the data couldn't load.
@@ -258,6 +259,13 @@ export default function MilestoneSubmission({ milestoneId, milestoneName, onChan
   const dialogRef = useRef(null);
   // True if the student submitted while the popup was open, so the dashboard knows to refresh.
   const changed = useRef(false);
+
+  // Open the popup when a notification points here, so the decision and any comment are visible right away.
+  useEffect(() => {
+    // Only when a notification was clicked.
+    if (openKey) setOpen(true);
+  // Run this for each new click.
+  }, [openKey]);
 
   // Load the data each time the popup opens, so an advisor's decision shows.
   useEffect(() => {

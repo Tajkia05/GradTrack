@@ -21,6 +21,8 @@ from app.modules.milestones.models import (
     MilestoneStatus,
     StudentMilestone,
 )
+# The page a notification opens when clicked.
+from app.modules.notifications import links
 from app.modules.notifications.models import Notification
 from app.modules.student.service import semester_index
 from app.modules.submissions.history import record_status_change
@@ -287,6 +289,8 @@ def respond_to_committee_invitation(
                 f"{faculty.full_name} {action} your "
                 "dissertation committee invitation."
             ),
+            # Clicking it opens the student's committee.
+            link=links.student_committee(db),
         )
     )
 
@@ -353,6 +357,8 @@ def leave_committee(
                 f"{faculty.full_name} left your "
                 "dissertation committee."
             ),
+            # Clicking it opens the student's committee.
+            link=links.student_committee(db),
         )
     )
 

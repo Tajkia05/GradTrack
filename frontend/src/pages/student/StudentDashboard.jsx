@@ -1,5 +1,7 @@
 // Student progress comes from the API; prerequisites and deadlines are calculated there.
 import { useEffect, useRef, useState } from "react";
+// useLocation reads which milestone a notification opened.
+import { useLocation } from "react-router-dom";
 import { api } from "../../api/client.js";
 import AdvisorDeclaration from "./AdvisorDeclaration.jsx";
 import AdvisorDeclarationDetails from "./AdvisorDeclarationDetails.jsx";
@@ -38,13 +40,37 @@ function formatDateTime(value) {
   return new Intl.DateTimeFormat("en-US", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value));
 }
 
-function MilestoneCard({ milestone, onProgressChanged }) {
+// targetKey is set when a notification opened this card, and onTargetHandled says it's been dealt with.
+function MilestoneCard({ milestone, onProgressChanged, targetKey, onTargetHandled }) {
+  // Points to the card on the page.
+  const cardRef = useRef(null);
+  // True for a moment after a notification opens this card, to highlight it.
+  const [highlighted, setHighlighted] = useState(false);
+
+  // When a notification opens this card: expand it, scroll to it and highlight it.
+  useEffect(() => {
+    // Do nothing unless a notification is opening this card.
+    if (!targetKey) return;
+    // Expand the card.
+    cardRef.current.open = true;
+    // Scroll to it.
+    cardRef.current.scrollIntoView({ behavior: "smooth", block: "center" });
+    // Turn on the highlight.
+    setHighlighted(true);
+    // Mark it as dealt with, so a later refresh doesn't open it again.
+    onTargetHandled();
+    // Turn the highlight off after a few seconds. This timer is left running when the click is marked as dealt with.
+    setTimeout(() => setHighlighted(false), 3000);
+  // Run this each time a notification opens the card.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [targetKey]);
+
   const completed = milestone.category === "completed";
   const isAdvisorDeclaration = completed && milestone.name.toLowerCase() === "advisor declaration";
   // "Completed" for milestones the app finishes by itself, and "Approved" when a person decides.
   const finishedWord = milestone.is_automatic ? "Completed" : "Approved";
   return (
-    <details className="group rounded-xl border border-line bg-panel open:border-sage/40">
+    <details ref={cardRef} className={`group rounded-xl border bg-panel transition-shadow open:border-sage/40 ${highlighted ? "border-sage ring-2 ring-sage" : "border-line"}`}>
       <summary className="flex cursor-pointer list-none flex-wrap items-center gap-3 rounded-xl p-4 focus-visible:outline-2 focus-visible:outline-sage sm:p-5 [&::-webkit-details-marker]:hidden">
         <span aria-hidden="true" className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full border text-sm ${completed ? "border-sage/30 bg-sage/10 text-sage" : milestone.category === "blocked" ? "border-amber-300/25 text-amber-200" : "border-line text-mist/60"}`}>
           {completed ? "✓" : milestone.category === "blocked" ? "!" : "○"}
@@ -86,7 +112,7 @@ function MilestoneCard({ milestone, onProgressChanged }) {
         {/* Only the Committee formation card gets the committee summary and button. */}
         {milestone.name.toLowerCase() === "committee formation" && <Committee onChanged={onProgressChanged} />}
         {/* These milestones get the submission button. */}
-        {SUBMITTABLE_MILESTONES.includes(milestone.name.toLowerCase()) && <MilestoneSubmission milestoneId={milestone.id} milestoneName={milestone.name} onChanged={onProgressChanged} />}
+        {SUBMITTABLE_MILESTONES.includes(milestone.name.toLowerCase()) && <MilestoneSubmission milestoneId={milestone.id} milestoneName={milestone.name} onChanged={onProgressChanged} openKey={targetKey} />}
         {milestone.requirements.length > 0 && <ul className="space-y-2">
           {milestone.requirements.map((requirement) => (
             <li key={requirement.name} className="flex gap-2">
@@ -109,6 +135,25 @@ export default function StudentDashboard() {
   const [activeSection, setActiveSection] = useState("all");
   const [declarationMessage, setDeclarationMessage] = useState("");
   const declarationNotice = useRef(null);
+  // The address bar, which holds the milestone a notification opened.
+  const location = useLocation();
+  // The milestone a notification opened, if any.
+  const targetId = new URLSearchParams(location.search).get("milestone");
+  // The last notification click that's been dealt with.
+  const [handledKey, setHandledKey] = useState(null);
+  // A notification click that still needs opening. Each click has its own key, even for the same notification.
+  const pendingKey = targetId && handledKey !== location.key ? location.key : null;
+
+  // Make sure the milestone a notification opened is on the page.
+  useEffect(() => {
+    // Only when a notification click is waiting.
+    if (!pendingKey) return;
+    // Show every section, in case a filter is hiding it.
+    setActiveSection("all");
+    // Show every completed milestone, in case it's in the hidden part.
+    setShowAllCompleted(true);
+  // Run this for each new click.
+  }, [pendingKey]);
 
   useEffect(() => {
     if (declarationMessage) declarationNotice.current?.focus();
@@ -225,7 +270,7 @@ export default function StudentDashboard() {
               <h2 id={`${key}-title`} className="text-xs font-semibold uppercase tracking-[0.16em] text-mist/70">{title}</h2>
               <span className="rounded-full bg-panel px-2 py-0.5 text-xs text-mist/60">{items.length}</span>
             </div>
-            {items.length > 0 ? <div className="space-y-2">{visible.map((milestone) => <MilestoneCard key={milestone.id} milestone={milestone} onProgressChanged={refreshDashboard} />)}</div>
+            {items.length > 0 ? <div className="space-y-2">{visible.map((milestone) => <MilestoneCard key={milestone.id} milestone={milestone} onProgressChanged={refreshDashboard} targetKey={String(milestone.id) === targetId ? pendingKey : null} onTargetHandled={() => setHandledKey(location.key)} />)}</div>
               : <p className="rounded-xl border border-dashed border-line px-5 py-4 text-sm text-mist/50">{key === "completed" ? "Your first finished milestone will appear here." : `No ${title.toLowerCase()} milestones.`}</p>}
             {key === "completed" && activeSection === "all" && items.length > 1 && <button aria-expanded={showAllCompleted} onClick={() => setShowAllCompleted((value) => !value)} className="mt-3 text-sm text-sage underline underline-offset-4 hover:text-sage-light">{showAllCompleted ? "Show less" : `Show ${items.length - 1} more`}</button>}
             {items.length > 0 && key !== "completed" && <p className="mt-2 text-xs text-mist/45">{description} Select a milestone to see details.</p>}

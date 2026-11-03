@@ -4,8 +4,8 @@
 # datetime stores when a notification was created.
 from datetime import datetime
 
-# DateTime = a date and time column, ForeignKey = a link to another table, Text = text of any length, func = database functions.
-from sqlalchemy import DateTime, ForeignKey, Text, func
+# DateTime = a date and time column, ForeignKey = a link to another table, String = short text, Text = text of any length, func = database functions.
+from sqlalchemy import DateTime, ForeignKey, String, Text, func
 # Mapped and mapped_column describe each column in a table.
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -24,6 +24,8 @@ class Notification(Base):
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
     # The message to show.
     message: Mapped[str] = mapped_column(Text)
+    # The page it opens when clicked, e.g. "/student?milestone=6". Empty = it isn't clickable.
+    link: Mapped[str | None] = mapped_column(String(255))
     # True once the user has read it.
     is_read: Mapped[bool] = mapped_column(default=False)
     # When it was created. The database fills this in.

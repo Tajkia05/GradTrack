@@ -212,6 +212,12 @@ def _load_rows(db: Session, student: User):
     return rows
 
 
+# Returns a semester's last day: May 31 for Spring, and December 31 for Fall.
+def _semester_end(term: Term, year: int) -> date:
+    # Choose the day from the term.
+    return date(year, 5, 31) if term == Term.SPRING else date(year, 12, 31)
+
+
 # Explains each course that counts differently than a student might expect, as {row id: note}.
 # It follows the same order and rules as calculate_progress, so the notes match the credits.
 def course_notes(rows) -> dict:
@@ -223,7 +229,11 @@ def course_notes(rows) -> dict:
     counted_ids = {row.id for row, _ in counted}
     # Go through the rows left out.
     for row, course in rows:
-        # A course in progress has no grade yet, so there's nothing to explain.
+        # A course with no grade from a finished semester needs one before it can count.
+        if row.grade is None and _today() > _semester_end(row.term, row.year):
+            # Tell the student what to do.
+            notes[row.id] = "This semester has ended. Edit this course to add its final grade, so it can count."
+        # A course in the running semester has no grade yet, and a counted course has nothing to explain here.
         if row.grade is None or row.id in counted_ids:
             # Move on to the next row.
             continue
@@ -348,6 +358,10 @@ def _check_semester(body: StudentCourseIn) -> None:
     if body.grade is not None and _today() < end:
         # Tell the student when they can enter the grade.
         raise HTTPException(422, f"You can enter a grade for {semester} starting {end:%B} {end.day}, {end.year}. Until then, select In progress.")
+    # A semester that has finished needs its final grade. The last day itself still allows either, since grades may not be out.
+    if body.grade is None and _today() > end:
+        # Tell the student what's needed.
+        raise HTTPException(422, f"{semester} has ended, so this course needs its final grade.")
 
 
 # Checks the semester and the course, including that a manual course isn't on the list.

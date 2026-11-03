@@ -3,6 +3,8 @@
 
 // useEffect runs code on a timer, and useState remembers values on the page.
 import { useEffect, useState } from "react";
+// useNavigate opens another page without reloading.
+import { useNavigate } from "react-router-dom";
 // getToken is needed because this request's reply has no content, so it can't use api().
 import { api, getToken } from "../api/client.js";
 
@@ -15,6 +17,8 @@ export default function NotificationBell() {
   const [notifications, setNotifications] = useState([]);
   // True while the list is showing.
   const [open, setOpen] = useState(false);
+  // Opens the page a notification points to.
+  const navigate = useNavigate();
   // How many haven't been read.
   const unread = notifications.filter((notification) => !notification.is_read).length;
 
@@ -70,11 +74,25 @@ export default function NotificationBell() {
             {/* One row for each notification. */}
             {notifications.map((notification) => (
               // Unread ones are slightly highlighted.
-              <li key={notification.id} className={`p-3 text-sm ${notification.is_read ? "text-mist/70" : "bg-sage/10 text-white"}`}>
-                {/* The message. */}
-                <p>{notification.message}</p>
-                {/* When it was created. */}
-                <p className="mt-1 text-xs text-mist/50">{new Intl.DateTimeFormat("en-US", { dateStyle: "medium", timeStyle: "short" }).format(new Date(notification.created_at))}</p>
+              <li key={notification.id} className={`text-sm ${notification.is_read ? "text-mist/70" : "bg-sage/10 text-white"}`}>
+                {/* A notification with a link is a button that opens it. Older ones with no link are plain text. */}
+                {notification.link ? (
+                  // Clicking closes the list and opens the page.
+                  <button type="button" onClick={() => { setOpen(false); navigate(notification.link); }} className="block w-full p-3 text-left transition-colors hover:bg-sage/15">
+                    {/* The message. */}
+                    <span className="block">{notification.message}</span>
+                    {/* When it was created. */}
+                    <span className="mt-1 block text-xs text-mist/50">{new Intl.DateTimeFormat("en-US", { dateStyle: "medium", timeStyle: "short" }).format(new Date(notification.created_at))}</span>
+                  </button>
+                ) : (
+                  // The plain version.
+                  <div className="p-3">
+                    {/* The message. */}
+                    <p>{notification.message}</p>
+                    {/* When it was created. */}
+                    <p className="mt-1 text-xs text-mist/50">{new Intl.DateTimeFormat("en-US", { dateStyle: "medium", timeStyle: "short" }).format(new Date(notification.created_at))}</p>
+                  </div>
+                )}
               </li>
             ))}
           </ul>

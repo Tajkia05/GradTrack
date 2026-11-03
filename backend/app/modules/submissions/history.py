@@ -11,6 +11,8 @@ from sqlalchemy.orm import Session
 
 # The milestone table, for its name, the list of statuses, and the "completed" or "approved" wording.
 from app.modules.milestones.models import Milestone, MilestoneStatus, finished_word
+# The page a notification opens when clicked.
+from app.modules.notifications import links
 # The notifications table.
 from app.modules.notifications.models import Notification
 # The student's account, for their name and advisor.
@@ -68,7 +70,7 @@ def record_status_change(db: Session, student_id: int, milestone_id: int, status
             # Put the comment after the message.
             message = f"{message} Comment: {comment}"
         # Add the student's notification.
-        db.add(Notification(user_id=student_id, message=message))
+        db.add(Notification(user_id=student_id, message=message, link=links.student_milestone(milestone_id)))
     # Find the student, for their name and advisor.
     student = db.get(User, student_id)
     # Find the advisor's message for this status, if it has one.
@@ -76,4 +78,7 @@ def record_status_change(db: Session, student_id: int, milestone_id: int, status
     # Tell the advisor, unless they made this change themselves.
     if student is not None and student.advisor_id not in (None, changed_by) and advisor_template is not None:
         # Add the advisor's notification.
-        db.add(Notification(user_id=student.advisor_id, message=advisor_template.format(student=student.full_name, name=milestone.name, when=when)))
+        # A submission opens that review, and anything else opens the advisor's list of students.
+        link = links.faculty_review(student_id, milestone_id) if status == MilestoneStatus.SUBMITTED else links.FACULTY_STUDENTS
+        # Add the notification.
+        db.add(Notification(user_id=student.advisor_id, message=advisor_template.format(student=student.full_name, name=milestone.name, when=when), link=link))

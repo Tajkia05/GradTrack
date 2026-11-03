@@ -31,6 +31,8 @@ class NotificationOut(BaseModel):
     id: int
     # The message to show.
     message: str
+    # The page it opens when clicked. Empty = it isn't clickable.
+    link: str | None
     # True once the user has read it.
     is_read: bool
     # When it was created.

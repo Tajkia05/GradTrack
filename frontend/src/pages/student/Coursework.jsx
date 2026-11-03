@@ -33,7 +33,10 @@ function semesterStatus(term, year) {
   // Today's date and time.
   const now = new Date();
   // Started and ended are true from the start of those days. endLabel is the date shown to the student.
-  return { started: now >= start, ended: now >= end, endLabel: isSpring ? `May 31, ${year}` : `December 31, ${year}` };
+  // True after the semester's last day has fully passed, which is when a final grade becomes required.
+  const past = now > new Date(year, isSpring ? 4 : 11, 31, 23, 59, 59);
+  // Return where the semester is, and the date to show the student.
+  return { started: now >= start, ended: now >= end, past, endLabel: isSpring ? `May 31, ${year}` : `December 31, ${year}` };
 }
 
 // Returns an empty form, set to the running semester.
@@ -466,14 +469,16 @@ function CourseworkContent({ data, onUpdate }) {
             {/* The label's text. */}
             Grade
             {/* The dropdown is locked to "In progress" until the semester has ended. */}
-            <select value={semester.ended ? form.grade : ""} disabled={!semester.ended} onChange={(event) => setField("grade", event.target.value)} className={`${FIELD} disabled:opacity-60`}>
-              {/* An empty grade means the course is still in progress. */}
-              <option value="">In progress</option>
+            <select required={semester.past} value={semester.ended ? form.grade : ""} disabled={!semester.ended} onChange={(event) => setField("grade", event.target.value)} className={`${FIELD} disabled:opacity-60`}>
+              {/* An empty grade means in progress. A finished semester must choose a grade instead. */}
+              <option value="">{semester.past ? "Select the final grade" : "In progress"}</option>
               {/* One option for each grade. */}
               {GRADES.map((grade) => <option key={grade} value={grade}>{grade}</option>)}
             </select>
             {/* Tell the student when they can enter a grade for a running semester. */}
             {semester.started && !semester.ended && <span className="mt-1 block text-xs text-mist/60">You can enter a grade starting {semester.endLabel}.</span>}
+            {/* Tell the student why a finished semester needs a grade. */}
+            {semester.past && <span className="mt-1 block text-xs text-mist/60">This semester has ended, so a final grade is required.</span>}
           </label>
           {/* The term dropdown. */}
           <label className="text-sm text-mist">

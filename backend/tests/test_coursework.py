@@ -136,7 +136,7 @@ class CourseworkTests(unittest.TestCase):
     # A course without a grade is in progress, so it doesn't count.
     def test_course_in_progress_does_not_count(self):
         # Lisa adds a course with no grade.
-        data = self.add(1, grade=None).json()
+        data = self.add(1, grade=None, year=2026).json()
         # It appears in her list.
         self.assertEqual(len(data["my_courses"]), 1)
         # It adds no credits.
@@ -254,7 +254,7 @@ class CourseworkTests(unittest.TestCase):
     # Editing a course updates the progress.
     def test_editing_a_course_updates_progress(self):
         # Lisa adds a course that's still in progress.
-        row_id = self.add(1, grade=None).json()["my_courses"][0]["id"]
+        row_id = self.add(1, grade=None, year=2026).json()["my_courses"][0]["id"]
         # The same course, now with a grade.
         body = dict(course_id=1, credits=3, term="fall", year=2025, grade="A")
         # She edits it.
@@ -390,7 +390,7 @@ class CourseworkTests(unittest.TestCase):
     # A manual course in progress doesn't count.
     def test_manual_course_in_progress_does_not_count(self):
         # Lisa enters a course with no grade.
-        data = self.add_manual(grade=None).json()
+        data = self.add_manual(grade=None, year=2026).json()
         # It adds no credits.
         self.assertEqual(data["coursework_credits"], 0)
 
@@ -459,7 +459,7 @@ class CourseworkTests(unittest.TestCase):
         # Lisa earns a B.
         self.add(1, grade="B")
         # She adds a course in progress.
-        self.add(2, grade=None)
+        self.add(2, grade=None, year=2026)
         # She earns an E, which earns no credit.
         self.add(10, grade="E")
         # Only the B counts.
@@ -588,7 +588,62 @@ class CourseworkTests(unittest.TestCase):
     # A course in progress has no note.
     def test_course_in_progress_has_no_note(self):
         # Lisa has no grade yet.
-        self.assertIsNone(self.note(self.add(1, grade=None).json(), 1))
+        self.assertIsNone(self.note(self.add(1, grade=None, year=2026).json(), 1, 2026))
+
+    # A finished semester needs a final grade, for both listed and manual courses.
+    def test_past_semester_requires_a_grade(self):
+        # A listed course from Fall 2025 with no grade is refused, with a clear message.
+        response = self.add(1, grade=None, year=2025, term="fall")
+        # It's refused.
+        self.assertEqual(response.status_code, 422)
+        # The message says why.
+        self.assertIn("Fall 2025 has ended", response.json()["detail"])
+        # A manual course is refused too.
+        self.assertEqual(self.add_manual(grade=None, year=2025).status_code, 422)
+
+    # A course can't be edited back to In progress after its semester ends.
+    def test_editing_cannot_remove_a_past_grade(self):
+        # Lisa adds a finished course with a grade.
+        row_id = self.add(1, grade="A", year=2025).json()["my_courses"][0]["id"]
+        # The same course with no grade.
+        body = dict(course_id=1, credits=3, term="fall", year=2025, grade=None)
+        # The edit is refused.
+        self.assertEqual(self.client.put(f"/api/students/me/courses/{row_id}", headers=self.headers(self.lisa), json=body).status_code, 422)
+
+    # The semester's last day still allows In progress, because grades may not be out.
+    def test_last_day_allows_in_progress_or_a_grade(self):
+        # Set today to the last day of Fall 2026.
+        self.today.return_value = date(2026, 12, 31)
+        # In progress is accepted.
+        self.assertEqual(self.add(1, grade=None, year=2026).status_code, 201)
+        # A grade is accepted too.
+        self.assertEqual(self.add(2, grade="A", year=2026).status_code, 201)
+
+    # The day after the semester ends, In progress is refused.
+    def test_day_after_the_semester_requires_a_grade(self):
+        # Set today to the day after Fall 2026 ends.
+        self.today.return_value = date(2027, 1, 1)
+        # In progress is refused.
+        self.assertEqual(self.add(1, grade=None, year=2026).status_code, 422)
+
+    # An older course with no grade is explained, and fixing it makes it count.
+    def test_existing_ungraded_past_course_is_explained_and_can_be_fixed(self):
+        # A course saved before this rule existed.
+        row = StudentCourse(student_id=self.lisa.id, course_id=1, credits=3, term=Term.FALL, year=2025, grade=None)
+        # Add it directly to the database.
+        self.db.add(row)
+        # Save it.
+        self.db.commit()
+        # Read the page.
+        data = self.client.get("/api/students/me/coursework", headers=self.headers(self.lisa)).json()
+        # The note says what to do.
+        self.assertIn("add its final grade", self.note(data, 1))
+        # The same course with a grade.
+        body = dict(course_id=1, credits=3, term="fall", year=2025, grade="A")
+        # The student edits it.
+        data = self.client.put(f"/api/students/me/courses/{row.id}", headers=self.headers(self.lisa), json=body).json()
+        # It now counts, and the note is gone.
+        self.assertEqual((data["coursework_credits"], self.note(data, 1)), (3, None))
 
     # A low grade in a core course explains the rule.
     def test_low_core_grade_is_explained(self):

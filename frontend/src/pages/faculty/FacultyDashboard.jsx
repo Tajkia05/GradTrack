@@ -1,7 +1,9 @@
 // FacultyDashboard.jsx — THE FACULTY'S HOME PAGE. URL: /faculty
 // Sprint 2: faculty overview with milestone reviews and committee management.
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+// useLocation reads which item a notification opened.
+import { useLocation } from "react-router-dom";
 import { api, getToken } from "../../api/client.js";
 
 
@@ -50,6 +52,45 @@ export default function FacultyDashboard() {
   const [membershipError, setMembershipError] = useState("");
   const [leavingMembership, setLeavingMembership] =
     useState(null);
+
+  // The address bar, which holds the item a notification opened.
+  const location = useLocation();
+  // The last notification click that's been dealt with, so a reload doesn't scroll again.
+  const handledClick = useRef(null);
+  // The review or section to highlight for a moment.
+  const [highlightedId, setHighlightedId] = useState(null);
+
+  // When a notification opens this page: scroll to its item and highlight it.
+  useEffect(() => {
+    // Wait until the page has loaded, and only handle each click once.
+    if (!data || handledClick.current === location.key) return;
+    // Read the link's details.
+    const params = new URLSearchParams(location.search);
+    // A link to one review, if there is one.
+    const student = params.get("student");
+    // The review's milestone.
+    const milestone = params.get("milestone");
+    // A link to a whole section, if there is one.
+    const section = params.get("section");
+    // Stop if this isn't a notification link.
+    if (!section && !student) return;
+    // Mark this click as dealt with.
+    handledClick.current = location.key;
+    // Choose the review if it's still on the list. Otherwise, it's been decided, so use the review section.
+    const reviewId = student ? `review-${student}-${milestone}` : null;
+    // Choose what to scroll to.
+    const targetId = reviewId && document.getElementById(reviewId) ? reviewId : `section-${section || "reviews"}`;
+    // Scroll to it.
+    document.getElementById(targetId)?.scrollIntoView({ behavior: "smooth", block: "center" });
+    // Highlight it.
+    setHighlightedId(targetId);
+    // Turn the highlight off after a few seconds. This timer is left running if the page's data reloads.
+    setTimeout(() => setHighlightedId(null), 3000);
+  // Run this when the page loads, and for each new click.
+  }, [data, location.key, location.search]);
+
+  // The highlight's styling, for the item a notification opened.
+  const highlightClass = (id) => (highlightedId === id ? "rounded-xl ring-2 ring-sage" : "");
 
 
   useEffect(() => {
@@ -421,7 +462,7 @@ export default function FacultyDashboard() {
       </section>
 
 
-      <section aria-labelledby="committee-invitations-title">
+      <section id="section-invitations" aria-labelledby="committee-invitations-title" className={highlightClass("section-invitations")}>
         <div className="mb-3 flex items-center gap-2">
           <h2
             id="committee-invitations-title"
@@ -525,7 +566,7 @@ export default function FacultyDashboard() {
       </section>
 
 
-      <section aria-labelledby="committee-memberships-title">
+      <section id="section-memberships" aria-labelledby="committee-memberships-title" className={highlightClass("section-memberships")}>
         <div className="mb-3 flex items-center gap-2">
           <h2
             id="committee-memberships-title"
@@ -607,7 +648,7 @@ export default function FacultyDashboard() {
       </section>
 
 
-      <section aria-labelledby="reviews-title">
+      <section id="section-reviews" aria-labelledby="reviews-title" className={highlightClass("section-reviews")}>
         <div className="mb-3 flex items-center gap-2">
           <h2
             id="reviews-title"
@@ -648,7 +689,8 @@ export default function FacultyDashboard() {
               return (
                 <div
                   key={reviewKey}
-                  className="rounded-xl border border-line bg-panel p-4"
+                  id={`review-${reviewKey}`}
+                  className={`rounded-xl border border-line bg-panel p-4 ${highlightClass(`review-${reviewKey}`)}`}
                 >
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <div>
@@ -856,7 +898,7 @@ export default function FacultyDashboard() {
       </section>
 
 
-      <section aria-labelledby="students-title">
+      <section id="section-students" aria-labelledby="students-title" className={highlightClass("section-students")}>
         <div className="mb-3 flex items-center gap-2">
           <h2
             id="students-title"
