@@ -41,7 +41,7 @@ function formatDateTime(value) {
 }
 
 // targetKey is set when a notification opened this card, and onTargetHandled says it's been dealt with.
-function MilestoneCard({ milestone, onProgressChanged, targetKey, onTargetHandled }) {
+function MilestoneCard({ milestone, onProgressChanged, onAdvisorDeclared, targetKey, onTargetHandled }) {
   // Points to the card on the page.
   const cardRef = useRef(null);
   // True for a moment after a notification opens this card, to highlight it.
@@ -107,6 +107,7 @@ function MilestoneCard({ milestone, onProgressChanged, targetKey, onTargetHandle
             <AdvisorDeclarationDetails />
           </div>
         ) : <p>{completed ? `This milestone has been ${finishedWord.toLowerCase()}.` : milestone.eligible ? "Prerequisites are met. This milestone is available to work on." : "This milestone is waiting on the requirements below."}</p>}
+        {milestone.name.toLowerCase() === "advisor declaration" && onAdvisorDeclared && <AdvisorDeclaration onDeclared={onAdvisorDeclared} />}
         {/* Only the Coursework card gets the credit summary and button. */}
         {milestone.name.toLowerCase() === "coursework" && <Coursework onChanged={onProgressChanged} />}
         {/* Only the Committee formation card gets the committee summary and button. */}
@@ -255,11 +256,7 @@ export default function StudentDashboard() {
       </nav>
 
       {declarationMessage && <p ref={declarationNotice} tabIndex={-1} role="status" className="rounded-xl border border-sage/30 bg-sage/10 p-4 text-sage focus:outline-none">{declarationMessage}</p>}
-      {student.advisor_id === null && <AdvisorDeclaration onDeclared={(dashboard) => {
-        setData(dashboard);
-        setActiveSection("all");
-        setDeclarationMessage(`${dashboard.student.advisor_name} is now your research advisor. Your progress has been updated.`);
-      }} />}
+
 
       {summary.total === 0 ? <p className="rounded-xl border border-line p-6 text-mist/70">No program milestones have been configured yet.</p> : visibleSections.map(({ key, title, description }) => {
         const items = milestones.filter((milestone) => milestone.category === key);
@@ -270,7 +267,11 @@ export default function StudentDashboard() {
               <h2 id={`${key}-title`} className="text-xs font-semibold uppercase tracking-[0.16em] text-mist/70">{title}</h2>
               <span className="rounded-full bg-panel px-2 py-0.5 text-xs text-mist/60">{items.length}</span>
             </div>
-            {items.length > 0 ? <div className="space-y-2">{visible.map((milestone) => <MilestoneCard key={milestone.id} milestone={milestone} onProgressChanged={refreshDashboard} targetKey={String(milestone.id) === targetId ? pendingKey : null} onTargetHandled={() => setHandledKey(location.key)} />)}</div>
+            {items.length > 0 ? <div className="space-y-2">{visible.map((milestone) => <MilestoneCard key={milestone.id} milestone={milestone} onProgressChanged={refreshDashboard} onAdvisorDeclared={student.advisor_id === null ? (dashboard) => {
+              setData(dashboard);
+              setActiveSection("all");
+              setDeclarationMessage(`${dashboard.student.advisor_name} is now your research advisor. Your progress has been updated.`);
+            } : undefined} targetKey={String(milestone.id) === targetId ? pendingKey : null} onTargetHandled={() => setHandledKey(location.key)} />)}</div>
               : <p className="rounded-xl border border-dashed border-line px-5 py-4 text-sm text-mist/50">{key === "completed" ? "Your first finished milestone will appear here." : `No ${title.toLowerCase()} milestones.`}</p>}
             {key === "completed" && activeSection === "all" && items.length > 1 && <button aria-expanded={showAllCompleted} onClick={() => setShowAllCompleted((value) => !value)} className="mt-3 text-sm text-sage underline underline-offset-4 hover:text-sage-light">{showAllCompleted ? "Show less" : `Show ${items.length - 1} more`}</button>}
             {items.length > 0 && key !== "completed" && <p className="mt-2 text-xs text-mist/45">{description} Select a milestone to see details.</p>}

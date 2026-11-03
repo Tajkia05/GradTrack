@@ -111,13 +111,10 @@ export default function AdvisorDeclaration({ onDeclared }) {
   const filtered = advisors.filter((item) => [item.full_name, item.email, item.department, item.affiliation, item.research_interests, item.lab_name].filter(Boolean).join(" ").toLowerCase().includes(query.trim().toLowerCase()));
   return (
     <>
-      <aside aria-labelledby="advisor-title" className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-dashed border-sage/40 bg-sage/5 p-5">
-        <div>
-          <h2 id="advisor-title" className="font-display text-lg font-semibold text-white">Declare your advisor</h2>
-          <p className="mt-1 text-sm text-mist/70">Explore faculty members and choose your research advisor.</p>
-        </div>
-        <button type="button" onClick={() => { setLoading(true); setOpen(true); }} aria-haspopup="dialog" className="rounded-lg bg-sage px-4 py-2 text-sm font-semibold text-ink transition hover:bg-sage-light">Choose advisor</button>
-      </aside>
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <p className="text-mist">Explore faculty members and choose your research advisor.</p>
+        <button type="button" onClick={() => { setLoading(true); setOpen(true); }} aria-haspopup="dialog" className="cursor-pointer rounded-lg border border-sage/40 bg-sage/10 px-4 py-2 text-sm font-medium text-sage hover:bg-sage/20">Choose advisor</button>
+      </div>
 
       <dialog ref={dialogRef} aria-labelledby="advisor-modal-title" aria-describedby="advisor-modal-description" onKeyDown={keepFocusInDialog} onCancel={(event) => { event.preventDefault(); cancel(); }} className="m-auto max-h-[90dvh] w-[calc(100%-2rem)] max-w-2xl overflow-y-auto rounded-2xl border border-sage/30 bg-panel p-0 text-mist shadow-2xl backdrop:bg-black/75 backdrop:backdrop-blur-sm">
         <form onSubmit={handleSubmit} aria-busy={saving}>
