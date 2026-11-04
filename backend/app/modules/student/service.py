@@ -74,10 +74,12 @@ def get_dashboard(db: Session, student: User, today: date | None = None) -> Dash
                 explanation = f"{required.name} is {word}."
             requirements.append(RequirementOut(name=required.name, met=met, explanation=explanation))
 
-        if milestone.name.casefold() == "comprehensive exam":
+        # Only needed if the declaration looks complete but no advisor is saved, so the student isn't told twice.
+        declaration_unmet = any(r.name == "Advisor declaration" and not r.met for r in requirements)
+        if milestone.name.casefold() == "comprehensive exam" and student.advisor_id is None and not declaration_unmet:
             requirements.append(RequirementOut(
-                name="Declared advisor", met=student.advisor_id is not None,
-                explanation="A research advisor must be declared." if student.advisor_id is None else "Research advisor is declared.",
+                name="Declared advisor", met=False,
+                explanation="A research advisor must be declared.",
             ))
         if milestone.name.casefold() == "candidacy":
             met = student.gpa is not None and student.gpa >= 3

@@ -165,7 +165,7 @@ def my_committee_invitations(
     faculty: User = Depends(require_role(Role.FACULTY)),
     db: Session = Depends(get_db),
 ):
-    """Return pending dissertation committee invitations."""
+    """Return pending committee invitations."""
     return get_pending_committee_invitations(
         db,
         faculty,
@@ -237,7 +237,7 @@ def leave_committee_membership(
     faculty: User = Depends(require_role(Role.FACULTY)),
     db: Session = Depends(get_db),
 ):
-    """Leave an approved dissertation committee."""
+    """Leave an approved committee."""
     removed = leave_committee(
         db,
         faculty,
@@ -254,6 +254,6 @@ def leave_committee_membership(
         )
 
     return {
-        "message": "You have left the dissertation committee."
+        "message": "You have left the committee."
     }
     

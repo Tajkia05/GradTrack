@@ -646,7 +646,6 @@ export default function FacultyDashboard() {
                         <p className="mt-1 text-sm text-mist/65">
                           Invited you to
                           join their
-                          dissertation
                           committee
                         </p>
 
@@ -771,8 +770,7 @@ export default function FacultyDashboard() {
                         </h3>
 
                         <p className="mt-1 text-sm text-mist/65">
-                          Dissertation
-                          committee member
+                          Committee member
                         </p>
 
                         <p className="mt-1 text-xs text-mist/45">
@@ -815,7 +813,7 @@ export default function FacultyDashboard() {
           <p className="rounded-xl border border-dashed border-line px-5 py-4 text-sm text-mist/50">
             You are not currently
             serving on any student
-            dissertation committees.
+            committees.
           </p>
         )}
       </section>
@@ -1238,7 +1236,7 @@ export default function FacultyDashboard() {
 
       {membershipToLeave && (
         <ConfirmDialog
-          title={`Leave ${membershipToLeave.student_name}'s dissertation committee?`}
+          title={`Leave ${membershipToLeave.student_name}'s committee?`}
           confirmLabel="Leave"
           onConfirm={
             handleLeaveCommittee

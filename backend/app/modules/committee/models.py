@@ -1,4 +1,4 @@
-# committee/models.py — THE PEOPLE ON EACH STUDENT'S DISSERTATION COMMITTEE.
+# committee/models.py — THE PEOPLE ON EACH STUDENT'S COMMITTEE.
 # The declared advisor isn't stored here: they're always the approved chair, taken from users.advisor_id.
 
 # date stores the day an invitation was sent.

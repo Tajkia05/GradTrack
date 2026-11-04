@@ -54,6 +54,14 @@ export default function NotificationBell() {
     if (notification.link) navigate(notification.link);
   }
 
+  // Runs when "Mark all as read" is clicked. The list stays open.
+  function markAllRead() {
+    // Gray them all out and clear the count right away.
+    setNotifications((current) => current.map((item) => ({ ...item, is_read: true })));
+    // Save it. A failed save isn't worth interrupting the page, so they just show as unread on the next check.
+    fetch("/api/notifications/read-all", { method: "POST", headers: { Authorization: `Bearer ${getToken()}` } }).catch(() => {});
+  }
+
   // Draw the bell and the list.
   return (
     // "relative" lets the list sit just under the bell.
@@ -69,6 +77,13 @@ export default function NotificationBell() {
       {open && (
         // It floats over the page, and scrolls if it's long.
         <div className="absolute right-0 z-20 mt-2 max-h-96 w-80 max-w-[calc(100vw-2rem)] overflow-y-auto rounded-xl border border-line bg-panel shadow-2xl">
+          {/* The button to mark them all as read, only when some are unread. */}
+          {unread > 0 && (
+            // It stays at the top of the list while the rest scrolls.
+            <div className="sticky top-0 z-10 flex justify-end border-b border-line bg-panel px-3 py-2">
+              <button type="button" onClick={markAllRead} className="text-xs font-semibold text-sage transition-colors hover:text-white">Mark all as read</button>
+            </div>
+          )}
           {/* A message when there are none. */}
           {notifications.length === 0 && <p className="p-4 text-sm text-mist/60">No notifications yet.</p>}
           {/* The list itself. */}

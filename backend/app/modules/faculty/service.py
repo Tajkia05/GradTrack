@@ -300,7 +300,7 @@ def respond_to_committee_invitation(
             user_id=invitation.student_id,
             message=(
                 f"{faculty.full_name} {action} your "
-                "dissertation committee invitation."
+                "committee invitation."
             ),
             link=links.student_committee(db),
         )
@@ -365,7 +365,7 @@ def leave_committee(
             user_id=student_id,
             message=(
                 f"{faculty.full_name} left your "
-                "dissertation committee."
+                "committee."
             ),
             link=links.student_committee(db),
         )

@@ -124,6 +124,11 @@ class DashboardTests(unittest.TestCase):
         self.lisa.advisor_id = 1
         self.assertTrue(self.milestone(self.lisa, 4).eligible)
 
+    def test_missing_advisor_is_only_reported_once(self):
+        reasons = self.milestone(self.lisa, 4).blocked_reasons
+        self.assertIn("Advisor declaration must be completed.", reasons)
+        self.assertNotIn("A research advisor must be declared.", reasons)
+
     def test_proposal_requires_both_comps_and_committee(self):
         self.progress(6, 4, MilestoneStatus.APPROVED, "2026-01-10")
         self.db.flush()

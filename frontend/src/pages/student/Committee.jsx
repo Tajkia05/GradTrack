@@ -274,7 +274,7 @@ export default function Committee({ onChanged }) {
         {/* The title and explanation. */}
         <div>
           {/* The popup's title. */}
-          <h2 id="committee-title" className="font-display text-2xl font-bold text-white">Dissertation committee</h2>
+          <h2 id="committee-title" className="font-display text-2xl font-bold text-white">Committee</h2>
           {/* A short explanation. */}
           <p className="mt-2 text-sm text-mist/70">Invite faculty members and track their responses. Your research advisor is your committee chair.</p>
         </div>

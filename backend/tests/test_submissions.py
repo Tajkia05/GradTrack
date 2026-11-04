@@ -263,6 +263,23 @@ class SubmissionTests(unittest.TestCase):
         # Only that one is read.
         self.assertEqual((after[first["id"]], after[second["id"]]), (True, False))
 
+    # Marking all as read covers all of the user's notifications, and nobody else's.
+    def test_marking_all_notifications_read(self):
+        # Lisa submits, which notifies her advisor.
+        self.submit()
+        # Her advisor requests a revision, which notifies her.
+        self.review("revision_requested")
+        # She resubmits, which notifies her advisor again.
+        self.submit(upload("v2.pdf"))
+        # Her advisor requests another revision, so she has two.
+        self.review("revision_requested")
+        # She marks all of hers as read.
+        self.assertEqual(self.client.post("/api/notifications/read-all", headers=self.headers(self.lisa)).status_code, 204)
+        # Both of hers are read.
+        self.assertEqual([item["is_read"] for item in self.bell(self.lisa)], [True, True])
+        # Her advisor's are still unread.
+        self.assertFalse(any(item["is_read"] for item in self.bell(self.faculty)))
+
     # Nobody can mark someone else's notification as read.
     def test_cannot_mark_someone_elses_notification_read(self):
         # Lisa submits, which notifies her advisor.

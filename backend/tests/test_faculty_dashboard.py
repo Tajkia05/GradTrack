@@ -539,7 +539,7 @@ class FacultyDashboardTests(unittest.TestCase):
             notification.message,
             (
                 "Dr. Faculty accepted your "
-                "dissertation committee invitation."
+                "committee invitation."
             ),
         )
 
@@ -585,7 +585,7 @@ class FacultyDashboardTests(unittest.TestCase):
             notification.message,
             (
                 "Dr. Faculty declined your "
-                "dissertation committee invitation."
+                "committee invitation."
             ),
         )
 
@@ -820,7 +820,7 @@ class FacultyDashboardTests(unittest.TestCase):
 
         self.assertEqual(
             response.json()["message"],
-            "You have left the dissertation committee.",
+            "You have left the committee.",
         )
 
         self.db.expire_all()
@@ -837,7 +837,7 @@ class FacultyDashboardTests(unittest.TestCase):
             .where(
                 Notification.user_id == student_id,
                 Notification.message.contains(
-                    "left your dissertation committee"
+                    "left your committee"
                 ),
             )
             .order_by(Notification.id.desc())
@@ -849,7 +849,7 @@ class FacultyDashboardTests(unittest.TestCase):
             notification.message,
             (
                 "Dr. Faculty left your "
-                "dissertation committee."
+                "committee."
             ),
         )
 
