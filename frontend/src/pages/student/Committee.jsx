@@ -7,6 +7,8 @@ import { useEffect, useRef, useState } from "react";
 import { api } from "../../api/client.js";
 // The app's own "are you sure?" box.
 import ConfirmDialog from "../../components/ConfirmDialog.jsx";
+// Shows a short success message.
+import { useToast } from "../../components/Toast.jsx";
 
 // The same styling for every dropdown and input on the form.
 const FIELD = "mt-1 w-full rounded-lg border border-line bg-ink px-3 py-2 text-sm text-white focus:border-sage focus:outline-none";
@@ -29,6 +31,8 @@ function CommitteeContent({ data, onUpdate }) {
   const [saving, setSaving] = useState(false);
   // The person waiting to be confirmed for removal. Empty when the box isn't showing.
   const [memberToRemove, setMemberToRemove] = useState(null);
+  // Shows a short success message.
+  const showToast = useToast();
 
   // Updates one field in the form.
   function setField(name, value) {
@@ -71,10 +75,16 @@ function CommitteeContent({ data, onUpdate }) {
       ? { external_name: form.external_name, external_affiliation: form.external_affiliation }
       // The faculty member's id.
       : { faculty_id: Number(form.faculty_id) };
+    // Find the invited faculty member's name for the success message.
+    const invited = data.faculty_options.find((person) => person.id === body.faculty_id);
     // Send the request.
     const saved = await send("/students/me/committee", { method: "POST", body: JSON.stringify(body) });
-    // Clear the form only if it saved.
-    if (saved) setForm(emptyForm());
+    // Stop here if it didn't save.
+    if (!saved) return;
+    // Confirm it. External members are added right away, and faculty are only invited.
+    showToast(form.is_external ? `${form.external_name} was added to your committee.` : `Invitation sent to ${invited?.full_name}.`);
+    // Clear the form.
+    setForm(emptyForm());
   }
 
   // Runs when the student confirms the removal in the box.
@@ -84,7 +94,9 @@ function CommitteeContent({ data, onUpdate }) {
     // Close the box.
     setMemberToRemove(null);
     // Delete the row.
-    await send(`/students/me/committee/${member.id}`, { method: "DELETE" });
+    const removed = await send(`/students/me/committee/${member.id}`, { method: "DELETE" });
+    // Confirm it if it worked.
+    if (removed) showToast(`${member.name} was removed from your committee.`);
   }
 
   // Draw the popup's content.

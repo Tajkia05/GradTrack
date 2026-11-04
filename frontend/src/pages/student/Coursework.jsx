@@ -7,6 +7,8 @@ import { useEffect, useRef, useState } from "react";
 import { api } from "../../api/client.js";
 // The app's own "are you sure?" box.
 import ConfirmDialog from "../../components/ConfirmDialog.jsx";
+// Shows a short success message.
+import { useToast } from "../../components/Toast.jsx";
 
 // The grades a student can select, matching the backend's list.
 const GRADES = ["A", "A-", "B+", "B", "B-", "C+", "C", "C-", "D+", "D", "E", "S", "U"];
@@ -226,6 +228,8 @@ function CourseDropdown({ courses, value, onSelect }) {
 
 // The popup's content. It receives the data from the backend, and a function that stores updated data.
 function CourseworkContent({ data, onUpdate }) {
+  // Shows a short success message.
+  const showToast = useToast();
   // The current values in the form.
   const [form, setForm] = useState(emptyForm());
   // The id of the row being edited. Empty when adding a new course.
@@ -338,8 +342,12 @@ function CourseworkContent({ data, onUpdate }) {
     const path = editingId ? `/students/me/courses/${editingId}` : "/students/me/courses";
     // Send the request, using PUT for an edit and POST for a new course.
     const saved = await send(path, { method: editingId ? "PUT" : "POST", body: JSON.stringify(body) });
-    // Clear the form only if it saved.
-    if (saved) resetForm();
+    // Stop here if it didn't save.
+    if (!saved) return;
+    // Confirm it. This comes before clearing the form, which also clears editingId.
+    showToast(editingId ? "Course updated." : "Course added.");
+    // Clear the form.
+    resetForm();
   }
 
   // Runs when the student confirms the removal in the box.
@@ -350,6 +358,8 @@ function CourseworkContent({ data, onUpdate }) {
     setRowToRemove(null);
     // Delete the row.
     const removed = await send(`/students/me/courses/${row.id}`, { method: "DELETE" });
+    // Confirm it if it worked.
+    if (removed) showToast(`${row.code} was removed.`);
     // If the removed row was being edited, clear the form too.
     if (removed && editingId === row.id) resetForm();
   }

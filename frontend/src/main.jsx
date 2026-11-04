@@ -7,6 +7,7 @@ import { createRoot } from "react-dom/client";
 import { BrowserRouter } from "react-router-dom";
 import App from "./App.jsx";
 import { AuthProvider } from "./auth/AuthContext.jsx";
+import { ToastProvider } from "./components/Toast.jsx";
 import "./index.css"; // turns on Tailwind styles for every page
 
 // Find the empty <div id="root"> in index.html and draw our app inside it.
@@ -17,7 +18,10 @@ createRoot(document.getElementById("root")).render(
     <BrowserRouter>
       {/* AuthProvider: makes "who is logged in" available to every page (see auth/AuthContext.jsx). */}
       <AuthProvider>
-        <App />
+        {/* ToastProvider: lets every page show a short success message (see components/Toast.jsx). */}
+        <ToastProvider>
+          <App />
+        </ToastProvider>
       </AuthProvider>
     </BrowserRouter>
   </StrictMode>

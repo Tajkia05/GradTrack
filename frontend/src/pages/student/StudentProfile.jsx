@@ -13,6 +13,8 @@ import { useAuth } from "../../auth/AuthContext.jsx";
 import Avatar from "../../components/Avatar.jsx";
 // The app's own "are you sure?" box.
 import ConfirmDialog from "../../components/ConfirmDialog.jsx";
+// Shows a short success message.
+import { useToast } from "../../components/Toast.jsx";
 
 // The same styling for every input on the form.
 const FIELD = "mt-1 w-full rounded-lg border border-line bg-ink px-3 py-2 text-sm text-white focus:border-sage focus:outline-none";
@@ -68,8 +70,8 @@ export default function StudentProfile() {
   const [error, setError] = useState("");
   // True while saving, to prevent double clicks.
   const [saving, setSaving] = useState(false);
-  // True just after a successful save, to confirm it worked.
-  const [saved, setSaved] = useState(false);
+  // Shows a short success message.
+  const showToast = useToast();
   // True while the picture is uploading or being removed.
   const [pictureBusy, setPictureBusy] = useState(false);
   // True while the "remove picture?" box is showing.
@@ -102,8 +104,6 @@ export default function StudentProfile() {
   function startEditing() {
     // Clear any old error.
     setError("");
-    // Clear any old confirmation.
-    setSaved(false);
     // Copy the saved values into the form, turning empty fields into blank text.
     setForm({ full_name: profile.full_name, ...Object.fromEntries(EDITABLE_FIELDS.map((field) => [field, profile[field] ?? ""])) });
   }
@@ -134,8 +134,8 @@ export default function StudentProfile() {
       setUser((current) => ({ ...current, full_name: result.full_name }));
       // Go back to viewing.
       setForm(null);
-      // Show the confirmation.
-      setSaved(true);
+      // Confirm it.
+      showToast("Your profile has been saved.");
     // The backend refused or couldn't be reached.
     } catch (err) {
       // Show the message.
@@ -148,11 +148,9 @@ export default function StudentProfile() {
   }
 
   // Sends a picture change to the backend, then reloads the picture everywhere it's shown.
-  async function changePicture(options) {
+  async function changePicture(options, successMessage) {
     // Clear any old error.
     setError("");
-    // Clear any old confirmation.
-    setSaved(false);
     // Disable the picture buttons while this runs.
     setPictureBusy(true);
     // Try the request.
@@ -161,6 +159,8 @@ export default function StudentProfile() {
       setProfile(await api("/students/me/profile/picture", options));
       // Changing this number reloads the picture in the navbar and on this page.
       setUser((current) => ({ ...current, picture_version: (current.picture_version ?? 0) + 1 }));
+      // Confirm it.
+      showToast(successMessage);
     // The backend refused or couldn't be reached.
     } catch (err) {
       // Show the message.
@@ -190,7 +190,7 @@ export default function StudentProfile() {
     // Try to read and send it.
     try {
       // Encode it, then upload it.
-      await changePicture({ method: "PUT", body: JSON.stringify({ data_base64: await readAsBase64(file) }) });
+      await changePicture({ method: "PUT", body: JSON.stringify({ data_base64: await readAsBase64(file) }) }, "Your profile picture has been updated.");
     // The file couldn't be read.
     } catch (err) {
       // Show the message.
@@ -203,7 +203,7 @@ export default function StudentProfile() {
     // Close the box.
     setConfirmingRemove(false);
     // Remove the picture.
-    await changePicture({ method: "DELETE" });
+    await changePicture({ method: "DELETE" }, "Your profile picture has been removed.");
   }
 
   // Show the error if the profile couldn't load.
@@ -224,8 +224,6 @@ export default function StudentProfile() {
         {/* Switches to the form. */}
         {!form && <button type="button" onClick={startEditing} className="rounded-lg bg-sage px-4 py-2 text-sm font-semibold text-ink hover:bg-sage-light">Edit profile</button>}
       </header>
-      {/* Confirms the save. */}
-      {saved && <p role="status" className="rounded-xl border border-sage/30 bg-sage/10 p-4 text-sm text-sage">Your profile has been saved.</p>}
       {/* Any error while viewing, such as a picture that's too large. */}
       {!form && error && <p role="alert" className="rounded-xl border border-amber-300/30 p-4 text-sm text-amber-200">{error}</p>}
 

@@ -96,7 +96,7 @@ export default function AdvisorDeclaration({ onDeclared }) {
       const dashboard = await api("/students/me/advisor", {
         method: "PUT", body: JSON.stringify({ advisor_id: Number(selected) }),
       });
-      // Close before the parent's success message takes keyboard focus.
+      // Close before the parent shows its success message.
       dialogRef.current.close();
       onDeclared(dashboard);
     } catch (err) {

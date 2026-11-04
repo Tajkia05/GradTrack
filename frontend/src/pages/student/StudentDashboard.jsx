@@ -3,6 +3,8 @@ import { useEffect, useRef, useState } from "react";
 // useLocation reads which milestone a notification opened.
 import { useLocation } from "react-router-dom";
 import { api } from "../../api/client.js";
+// Shows a short success message.
+import { useToast } from "../../components/Toast.jsx";
 import AdvisorDeclaration from "./AdvisorDeclaration.jsx";
 import AdvisorDeclarationDetails from "./AdvisorDeclarationDetails.jsx";
 // The credit summary, button and popup on the Coursework card.
@@ -134,8 +136,8 @@ export default function StudentDashboard() {
   const [attempt, setAttempt] = useState(0);
   const [showAllCompleted, setShowAllCompleted] = useState(false);
   const [activeSection, setActiveSection] = useState("all");
-  const [declarationMessage, setDeclarationMessage] = useState("");
-  const declarationNotice = useRef(null);
+  // Shows a short success message.
+  const showToast = useToast();
   // The address bar, which holds the milestone a notification opened.
   const location = useLocation();
   // The milestone a notification opened, if any.
@@ -155,10 +157,6 @@ export default function StudentDashboard() {
     setShowAllCompleted(true);
   // Run this for each new click.
   }, [pendingKey]);
-
-  useEffect(() => {
-    if (declarationMessage) declarationNotice.current?.focus();
-  }, [declarationMessage]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -255,9 +253,6 @@ export default function StudentDashboard() {
         })}
       </nav>
 
-      {declarationMessage && <p ref={declarationNotice} tabIndex={-1} role="status" className="rounded-xl border border-sage/30 bg-sage/10 p-4 text-sage focus:outline-none">{declarationMessage}</p>}
-
-
       {summary.total === 0 ? <p className="rounded-xl border border-line p-6 text-mist/70">No program milestones have been configured yet.</p> : visibleSections.map(({ key, title, description }) => {
         const items = milestones.filter((milestone) => milestone.category === key);
         const visible = key === "completed" && !showAllCompleted && activeSection === "all" ? items.slice(0, 1) : items;
@@ -270,7 +265,7 @@ export default function StudentDashboard() {
             {items.length > 0 ? <div className="space-y-2">{visible.map((milestone) => <MilestoneCard key={milestone.id} milestone={milestone} onProgressChanged={refreshDashboard} onAdvisorDeclared={student.advisor_id === null ? (dashboard) => {
               setData(dashboard);
               setActiveSection("all");
-              setDeclarationMessage(`${dashboard.student.advisor_name} is now your research advisor. Your progress has been updated.`);
+              showToast(`${dashboard.student.advisor_name} is now your research advisor. Your progress has been updated.`);
             } : undefined} targetKey={String(milestone.id) === targetId ? pendingKey : null} onTargetHandled={() => setHandledKey(location.key)} />)}</div>
               : <p className="rounded-xl border border-dashed border-line px-5 py-4 text-sm text-mist/50">{key === "completed" ? "Your first finished milestone will appear here." : `No ${title.toLowerCase()} milestones.`}</p>}
             {key === "completed" && activeSection === "all" && items.length > 1 && <button aria-expanded={showAllCompleted} onClick={() => setShowAllCompleted((value) => !value)} className="mt-3 text-sm text-sage underline underline-offset-4 hover:text-sage-light">{showAllCompleted ? "Show less" : `Show ${items.length - 1} more`}</button>}

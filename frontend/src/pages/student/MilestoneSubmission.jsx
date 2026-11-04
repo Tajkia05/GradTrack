@@ -5,6 +5,8 @@
 import { useEffect, useRef, useState } from "react";
 // api talks to the backend, and getToken gives the login token needed to download a file.
 import { api, getToken } from "../../api/client.js";
+// Shows a short success message.
+import { useToast } from "../../components/Toast.jsx";
 
 // The largest file allowed, matching the backend: 10 MB.
 const MAX_FILE_BYTES = 10 * 1024 * 1024;
@@ -68,6 +70,8 @@ function SubmissionContent({ data, onUpdate }) {
   const [error, setError] = useState("");
   // True while the files are being sent, to prevent double clicks.
   const [saving, setSaving] = useState(false);
+  // Shows a short success message.
+  const showToast = useToast();
 
   // Runs when the student chooses files.
   function chooseFiles(event) {
@@ -119,6 +123,8 @@ function SubmissionContent({ data, onUpdate }) {
       const encoded = await Promise.all(files.map(async (file) => ({ filename: file.name, data_base64: await readAsBase64(file) })));
       // Send them, and show the updated data from the backend.
       onUpdate(await api(`/students/me/milestones/${data.milestone_id}/submission`, { method: "POST", body: JSON.stringify({ files: encoded }) }));
+      // Confirm it.
+      showToast("Your submission was sent for review.");
       // Clear the chosen files.
       setFiles([]);
       // Clear the file box too.

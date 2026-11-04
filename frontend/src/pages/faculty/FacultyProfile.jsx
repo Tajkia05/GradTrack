@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../../api/client.js";
+import { useToast } from "../../components/Toast.jsx";
 
 
 const EMPTY_PROFILE = {
@@ -24,7 +25,7 @@ export default function FacultyProfile() {
   const [loadingError, setLoadingError] = useState("");
   const [saveError, setSaveError] = useState("");
   const [saving, setSaving] = useState(false);
-  const [saved, setSaved] = useState(false);
+  const showToast = useToast();
 
 
   useEffect(() => {
@@ -60,8 +61,6 @@ export default function FacultyProfile() {
       ...current,
       [name]: value,
     }));
-
-    setSaved(false);
   }
 
 
@@ -72,7 +71,6 @@ export default function FacultyProfile() {
     });
 
     setSaveError("");
-    setSaved(false);
     setEditing(true);
   }
 
@@ -84,7 +82,6 @@ export default function FacultyProfile() {
     });
 
     setSaveError("");
-    setSaved(false);
     setEditing(false);
   }
 
@@ -101,7 +98,6 @@ export default function FacultyProfile() {
 
     setSaving(true);
     setSaveError("");
-    setSaved(false);
 
     try {
       const updated = await api(
@@ -136,7 +132,7 @@ export default function FacultyProfile() {
       });
 
       setEditing(false);
-      setSaved(true);
+      showToast("Profile saved successfully.");
     } catch (err) {
       setSaveError(err.message);
     } finally {
@@ -222,15 +218,6 @@ export default function FacultyProfile() {
           </button>
         )}
       </header>
-
-      {saved && (
-        <p
-          role="status"
-          className="rounded-xl border border-sage/30 bg-sage/10 px-4 py-3 text-sm text-sage"
-        >
-          Profile saved successfully.
-        </p>
-      )}
 
       {!editing ? (
         <div className="grid gap-4 md:grid-cols-2">
@@ -378,8 +365,6 @@ export default function FacultyProfile() {
                         ? null
                         : value === "true",
                   }));
-
-                  setSaved(false);
                 }}
                 className="mt-2 w-full rounded-xl border border-line bg-ink/30 px-3 py-2 text-sm text-white outline-none focus:border-sage/50"
               >

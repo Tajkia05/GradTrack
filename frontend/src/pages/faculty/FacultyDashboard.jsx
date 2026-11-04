@@ -6,12 +6,20 @@ import { useEffect, useRef, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { api, getToken } from "../../api/client.js";
 import ConfirmDialog from "../../components/ConfirmDialog.jsx";
+import { useToast } from "../../components/Toast.jsx";
 
 
 const STATUS_LABELS = {
   submitted: "Submitted",
   under_review: "Under review",
   revision_requested: "Revision requested",
+};
+
+// How each review decision is worded in the success message.
+const DECISION_LABELS = {
+  approved: "approved",
+  rejected: "rejected",
+  revision_requested: "sent back for revision",
 };
 
 
@@ -34,6 +42,7 @@ function ProgressBar({ value }) {
 
 
 export default function FacultyDashboard() {
+  const showToast = useToast();
   const [data, setData] = useState(null);
   const [error, setError] = useState("");
   const [attempt, setAttempt] = useState(0);
@@ -286,6 +295,10 @@ export default function FacultyDashboard() {
       setAttempt(
         (value) => value + 1
       );
+
+      showToast(
+        `${review.student_name}'s ${review.milestone_name} was ${DECISION_LABELS[status]}.`
+      );
     } catch (err) {
       setReviewError(err.message);
     } finally {
@@ -393,6 +406,10 @@ export default function FacultyDashboard() {
           )
       );
 
+      showToast(
+        `You ${status === "approved" ? "accepted" : "declined"} ${invitation.student_name}'s committee invitation.`
+      );
+
       if (status === "approved") {
         try {
           const refreshed =
@@ -461,6 +478,10 @@ export default function FacultyDashboard() {
               item.id !==
               membership.id
           )
+      );
+
+      showToast(
+        `You left ${membership.student_name}'s committee.`
       );
     } catch (err) {
       setMembershipError(
