@@ -7,13 +7,15 @@ import { useEffect, useRef, useState } from "react";
 import { api, getToken } from "../../api/client.js";
 // Shows a short success message.
 import { useToast } from "../../components/Toast.jsx";
+// The presentation dates part of the popup.
+import PresentationScheduling from "./PresentationScheduling.jsx";
 
 // The largest file allowed, matching the backend: 10 MB.
 const MAX_FILE_BYTES = 10 * 1024 * 1024;
 // The most files in one submission, matching the backend.
 const MAX_FILES = 5;
 // The text shown for each status.
-const STATUS_LABELS = { not_started: "Not started", in_progress: "In progress", submitted: "Submitted", under_review: "In review", revision_requested: "Revision requested", approved: "Approved", rejected: "Rejected" };
+const STATUS_LABELS = { not_started: "Not started", in_progress: "In progress", submitted: "Submitted", under_review: "In review", revision_requested: "Revision requested", approved: "Approved", rejected: "Rejected", document_approved: "Document approved" };
 
 // Shows a file's size in a readable way.
 function formatSize(bytes) {
@@ -162,12 +164,17 @@ function SubmissionContent({ data, onUpdate }) {
       {/* The current status. */}
       <section aria-label="Current status" className="rounded-xl border border-sage/25 bg-sage/5 p-4 text-sm">
         {/* The status itself. */}
-        <p className="text-mist">Status: <strong className="text-white">{STATUS_LABELS[data.status] ?? data.status}</strong></p>
+        <p className="text-mist">Status: <strong className="text-white">{data.document_approved ? STATUS_LABELS.document_approved : STATUS_LABELS[data.status] ?? data.status}</strong></p>
+        {/* The attempt, once a rejection has started the second one. */}
+        {data.attempt_number > 1 && <p className="mt-1 text-mist">Attempt {data.attempt_number} of {data.max_attempts}</p>}
         {/* The exact approval date and time. */}
         {data.approved_at && <p className="mt-1 font-medium text-sage">Approved on {formatDateTime(data.approved_at)}</p>}
         {/* Why the student can't submit right now, if so. */}
         {data.blocked_reasons.map((reason) => <p key={reason} className="mt-1 text-amber-200">{reason}</p>)}
       </section>
+
+      {/* The presentation dates, after the document is uploaded. */}
+      <PresentationScheduling data={data} onUpdate={onUpdate} />
 
       {/* The upload form, only when the student can submit. */}
       {data.can_submit && (

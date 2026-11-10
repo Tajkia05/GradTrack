@@ -3,6 +3,8 @@
 
 # base64 encodes test files the same way the page does.
 import base64
+# datetime is a date and time, timedelta is a length of time, and timezone.utc is UTC.
+from datetime import datetime, timedelta, timezone
 # unittest is Python's built-in test tool.
 import unittest
 
@@ -15,6 +17,8 @@ import test_student_dashboard as fixtures
 from app.modules.milestones.models import MilestoneStatus, StudentMilestone
 # The notifications table.
 from app.modules.notifications.models import Notification
+# The presentation tables and the confirmed status.
+from app.modules.presentations.models import SCHEDULED, Presentation, PresentationOption
 # The upload limit.
 from app.modules.submissions.service import MAX_FILE_BYTES
 
@@ -73,6 +77,31 @@ class SubmissionTests(unittest.TestCase):
     def review(self, status):
         # Lisa's advisor is faculty 1.
         return self.client.patch(f"/api/faculty/students/{self.lisa.id}/milestones/{EXAM}", headers=self.headers(self.faculty), json=dict(status=status))
+
+    # Takes Lisa's exam through the whole flow: upload, document approval, a presentation yesterday, and the final approval.
+    def pass_exam(self):
+        # Lisa submits.
+        self.submit()
+        # Her advisor approves the document.
+        self.review("approved")
+        # A presentation that was confirmed for yesterday.
+        presentation = Presentation(student_id=self.lisa.id, milestone_id=EXAM, attempt=1, status=SCHEDULED, mode="in_person", location="Room 1")
+        # Save it, to get its id.
+        self.db.add(presentation)
+        # Send it to the database.
+        self.db.flush()
+        # Its date, yesterday.
+        option = PresentationOption(presentation_id=presentation.id, starts_at=datetime.now(timezone.utc) - timedelta(days=1))
+        # Save the date, to get its id.
+        self.db.add(option)
+        # Send it to the database.
+        self.db.flush()
+        # Confirm that date.
+        presentation.chosen_option_id = option.id
+        # Save everything.
+        self.db.commit()
+        # Her advisor records the final approval.
+        return self.review("approved")
 
     # Only students can use the student endpoints.
     def test_only_students_can_submit(self):
@@ -152,23 +181,29 @@ class SubmissionTests(unittest.TestCase):
 
     # Approval completes the milestone, and it can't be submitted again.
     def test_approved_milestone_cannot_be_submitted(self):
-        # Lisa submits.
-        self.submit()
-        # Her advisor approves.
-        self.review("approved")
+        # Lisa passes her exam.
+        self.pass_exam()
         # Read the page.
         data = self.page().json()
         # It's approved, and can't be submitted.
         self.assertEqual((data["status"], data["can_submit"]), ("approved", False))
 
-    # A rejected milestone can't be submitted again.
-    def test_rejected_milestone_cannot_be_submitted(self):
+    # A rejection allows one more attempt, and a second rejection is final.
+    def test_second_rejection_is_final(self):
         # Lisa submits.
         self.submit()
         # Her advisor rejects it.
         self.review("rejected")
-        # A new submission is refused.
+        # The second attempt is accepted.
+        self.assertEqual(self.submit().status_code, 201)
+        # The page says it's attempt 2 of 2.
+        self.assertEqual((self.page().json()["attempt_number"], self.page().json()["max_attempts"]), (2, 2))
+        # Her advisor rejects it again.
+        self.review("rejected")
+        # A third attempt is refused.
         self.assertEqual(self.submit().status_code, 409)
+        # The page explains why.
+        self.assertIn("no more attempts", " ".join(self.page().json()["blocked_reasons"]))
 
     # Returns a user's notification messages, oldest first.
     def messages(self, user_id):
@@ -304,10 +339,8 @@ class SubmissionTests(unittest.TestCase):
 
     # An approval shows its exact time on the dashboard, in the popup, and in the notification.
     def test_approval_shows_date_and_time(self):
-        # Lisa submits.
-        self.submit()
-        # Her advisor approves.
-        self.review("approved")
+        # Lisa passes her exam.
+        self.pass_exam()
         # The popup has the time.
         self.assertIsNotNone(self.page().json()["approved_at"])
         # Read the dashboard.

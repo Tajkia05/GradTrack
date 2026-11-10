@@ -19,6 +19,8 @@ from app.modules.notifications.router import router as notifications_router
 from app.modules.submissions.router import router as submissions_router
 # The student profile endpoints.
 from app.modules.profile.router import router as profile_router
+# The presentation scheduling endpoints.
+from app.modules.presentations.router import router as presentations_router
 
 # Create the backend app.
 app = FastAPI(title="GradTrack API")
@@ -49,6 +51,8 @@ app.include_router(notifications_router, prefix="/api")
 app.include_router(submissions_router, prefix="/api")
 # Plug in the student profile endpoints.
 app.include_router(profile_router, prefix="/api")
+# Plug in the presentation scheduling endpoints.
+app.include_router(presentations_router, prefix="/api")
 
 
 # A simple "is the server running?" check. Visit /api/health to test.

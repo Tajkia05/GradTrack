@@ -5,6 +5,8 @@ from datetime import date
 from pydantic import BaseModel
 
 from app.modules.milestones.models import MilestoneStatus
+# One advisee's presentation and the stage it's at.
+from app.modules.presentations.schemas import AdvisorPresentationOut
 
 
 class FacultyProfile(BaseModel):
@@ -39,6 +41,8 @@ class FacultyDashboardOut(BaseModel):
     summary: FacultySummary
     students: list[AssignedStudentOut]
     pending_reviews: list[PendingReviewOut]
+    # The advisees' exam, proposal and defense presentations, after the document is approved.
+    presentations: list[AdvisorPresentationOut] = []
 
 
 class MilestoneReviewRequest(BaseModel):

@@ -14,6 +14,8 @@ FACULTY_INVITATIONS = "/faculty?section=invitations"
 FACULTY_MEMBERSHIPS = "/faculty?section=memberships"
 # Opens the faculty dashboard at their students.
 FACULTY_STUDENTS = "/faculty?section=students"
+# Opens the faculty dashboard at their students' presentations.
+FACULTY_PRESENTATIONS = "/faculty?section=presentations"
 
 
 # Opens a milestone's card on the student's dashboard.

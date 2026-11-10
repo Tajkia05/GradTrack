@@ -13,6 +13,8 @@ import Coursework from "./Coursework.jsx";
 import Committee from "./Committee.jsx";
 // The button and popup for submitting a milestone's documents.
 import MilestoneSubmission from "./MilestoneSubmission.jsx";
+// The presentation status labels and date format.
+import { PRESENTATION_LABELS, formatWhen } from "./PresentationScheduling.jsx";
 
 // The milestones that are submitted with documents and reviewed by the advisor.
 const SUBMITTABLE_MILESTONES = ["comprehensive exam", "dissertation proposal", "dissertation defense"];
@@ -82,6 +84,8 @@ function MilestoneCard({ milestone, onProgressChanged, onAdvisorDeclared, target
           {milestone.blocked_reasons.length > 0 && (
             <p className="mt-1 text-sm leading-relaxed text-amber-200/80">{milestone.blocked_reasons.join(" ")}</p>
           )}
+          {/* The presentation's status, with its date once confirmed. */}
+          {milestone.presentation && <p className="mt-1 text-sm text-sage">{PRESENTATION_LABELS[milestone.presentation.status] ?? milestone.presentation.status}{milestone.presentation.scheduled_at ? `: ${formatWhen(milestone.presentation.scheduled_at)}` : ""}</p>}
         </div>
         <div className="flex flex-wrap items-center gap-3 text-xs sm:text-sm">
           <span className="text-mist/60">
@@ -91,7 +95,8 @@ function MilestoneCard({ milestone, onProgressChanged, onAdvisorDeclared, target
           </span>
           {milestone.overdue && <span className="font-medium text-amber-200">Overdue</span>}
           <span className={`rounded-full border px-3 py-1 text-xs ${completed ? "border-sage/25 bg-sage/10 text-sage" : "border-line text-mist"}`}>
-            {completed ? finishedWord : STATUS_LABELS[milestone.status] || milestone.status}
+            {/* An approved document waiting for its presentation says so, instead of "In review". */}
+            {completed ? finishedWord : milestone.document_approved ? "Document approved" : STATUS_LABELS[milestone.status] || milestone.status}
           </span>
           <span aria-hidden="true" className="text-mist/50 transition-transform group-open:rotate-180">⌄</span>
         </div>

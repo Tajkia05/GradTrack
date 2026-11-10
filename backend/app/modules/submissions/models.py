@@ -29,6 +29,8 @@ class MilestoneSubmission(Base):
     attempt: Mapped[int]
     # When it was submitted. The database fills this in.
     submitted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    # When the advisor approved this document, before the presentation. Empty = not approved yet.
+    document_approved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 # One uploaded file. The file itself is stored in the database, so every teammate's backend can open it.

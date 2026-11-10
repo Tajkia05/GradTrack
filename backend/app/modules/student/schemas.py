@@ -7,6 +7,8 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.modules.milestones.models import MilestoneStatus
+# The short presentation status shown on a milestone card.
+from app.modules.presentations.schemas import PresentationSummary
 from app.modules.users.models import EnrollmentStatus, Term
 
 
@@ -72,6 +74,10 @@ class MilestoneOut(BaseModel):
     eligible: bool
     requirements: list[RequirementOut]
     blocked_reasons: list[str]
+    # The presentation's status and date, for the comprehensive exam, proposal and defense. Empty if none was proposed.
+    presentation: PresentationSummary | None = None
+    # True while the advisor-approved document waits for its presentation, so the card says "Document approved".
+    document_approved: bool = False
 
 
 class ProgressSummary(BaseModel):

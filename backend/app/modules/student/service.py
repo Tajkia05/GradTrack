@@ -7,6 +7,8 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.modules.milestones.models import Milestone, MilestonePrerequisite, MilestoneStatus, StudentMilestone, finished_word, is_automatic
+# The milestones with a presentation, and the short status shown on their cards.
+from app.modules.presentations.service import PRESENTED_MILESTONES, document_approved, summary as presentation_summary
 from app.modules.student.schemas import DashboardOut, MilestoneOut, ProgressSummary, RequirementOut, StudentProfile
 # The status history holds the exact time of each approval.
 from app.modules.submissions.models import MilestoneStatusHistory
@@ -113,6 +115,11 @@ def get_dashboard(db: Session, student: User, today: date | None = None) -> Dash
             deadline_label=semester_label(start + deadline - 1) if start is not None and deadline is not None else None,
             overdue=not approved and deadline is not None and current_semester is not None and current_semester > deadline,
             eligible=not approved and not blockers, requirements=requirements, blocked_reasons=blockers,
+            # Only milestones with a presentation, and only before a decision is final.
+            presentation=(presentation_summary(db, student.id, milestone.id)
+                          if milestone.name in PRESENTED_MILESTONES and status not in (MilestoneStatus.APPROVED, MilestoneStatus.REJECTED) else None),
+            # Only milestones with a presentation can have an approved document.
+            document_approved=milestone.name in PRESENTED_MILESTONES and document_approved(db, student.id, milestone.id, status),
         ))
 
     counts = {category: sum(m.category == category for m in results)

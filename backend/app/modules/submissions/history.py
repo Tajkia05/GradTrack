@@ -45,6 +45,38 @@ ADVISOR_MESSAGES = {
 }
 
 
+# The history status for an approved document. It isn't a milestone status, because the milestone isn't complete yet.
+DOCUMENT_APPROVED = "document_approved"
+
+
+# Writes the current time for a message, e.g. "November 2, 2026 at 3:30 PM ET".
+def _now_text() -> str:
+    # The current time in New York, the same as the rest of the app.
+    now = datetime.now(ZoneInfo("America/New_York"))
+    # Write it out.
+    return f"{now:%B} {now.day}, {now.year} at {now.strftime('%I:%M %p').lstrip('0')} ET"
+
+
+# Records that the advisor approved the document before the presentation, and tells the student. It doesn't save by itself.
+def record_document_approval(db: Session, student_id: int, milestone_id: int, changed_by: int, comment: str | None = None) -> None:
+    # Add the history row.
+    db.add(MilestoneStatusHistory(student_id=student_id, milestone_id=milestone_id, status=DOCUMENT_APPROVED, changed_by=changed_by, comment=comment))
+    # Find the milestone, for its name.
+    milestone = db.get(Milestone, milestone_id)
+    # Without a milestone, there's nothing to describe.
+    if milestone is None:
+        # Leave with only the history row added.
+        return
+    # Build the student's message.
+    message = f"Your advisor approved your {milestone.name} document on {_now_text()}. You can now propose presentation dates."
+    # Add the reviewer's comment, if there is one.
+    if comment:
+        # Put the comment after the message.
+        message = f"{message} Comment: {comment}"
+    # Add the student's notification, which opens the milestone.
+    db.add(Notification(user_id=student_id, message=message, link=links.student_milestone(milestone_id)))
+
+
 # Adds the history row and the notifications. It doesn't save by itself, so it joins the save that changes the status.
 def record_status_change(db: Session, student_id: int, milestone_id: int, status: MilestoneStatus, changed_by: int, comment: str | None = None) -> None:
     # Add the history row, storing the status as text.
@@ -57,10 +89,8 @@ def record_status_change(db: Session, student_id: int, milestone_id: int, status
     if milestone is None:
         # Leave with only the history row added.
         return
-    # The current time in New York, the same as the rest of the app.
-    now = datetime.now(ZoneInfo("America/New_York"))
-    # Write it out, e.g. "November 2, 2026 at 3:30 PM ET".
-    when = f"{now:%B} {now.day}, {now.year} at {now.strftime('%I:%M %p').lstrip('0')} ET"
+    # The current time, e.g. "November 2, 2026 at 3:30 PM ET".
+    when = _now_text()
     # Tell the student, unless this status has no message for them, such as their own submission.
     if template is not None:
         # Fill in the message.

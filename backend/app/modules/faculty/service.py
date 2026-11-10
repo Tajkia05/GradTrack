@@ -28,6 +28,8 @@ from app.modules.milestones.models import (
 )
 from app.modules.notifications import links
 from app.modules.notifications.models import Notification
+# Before the presentation, Approve only approves the document.
+from app.modules.presentations.service import advisor_presentation, approve_document_if_needed, waiting_for_presentation
 from app.modules.student.service import semester_index
 from app.modules.submissions.history import record_status_change
 from app.modules.users.models import Role, Term, User
@@ -107,6 +109,8 @@ def get_faculty_dashboard(
 
     student_outputs = []
     pending_reviews = []
+    # The advisees' presentations, for the Presentations section.
+    presentations = []
 
     for student in students:
         progress_rows = list(
@@ -155,6 +159,21 @@ def get_faculty_dashboard(
             if milestone is None:
                 continue
 
+            # Add the presentation, if this milestone has one in progress.
+            presentation = advisor_presentation(
+                db, student, milestone, row.status
+            )
+
+            if presentation is not None:
+                presentations.append(presentation)
+
+            # An approved document waiting for its presentation has
+            # nothing to decide yet. It comes back once the date passes.
+            if waiting_for_presentation(
+                db, student, milestone, row.status
+            ):
+                continue
+
             pending_reviews.append(
                 PendingReviewOut(
                     student_id=student.id,
@@ -164,6 +183,39 @@ def get_faculty_dashboard(
                     status=row.status,
                 )
             )
+
+    # The students whose committees this faculty member is on, other than their own advisees.
+    member_of = db.scalars(
+        select(User)
+        .join(CommitteeMember, CommitteeMember.student_id == User.id)
+        .where(
+            CommitteeMember.faculty_id == faculty.id,
+            CommitteeMember.status == "approved",
+            User.role == Role.STUDENT,
+            User.advisor_id.is_distinct_from(faculty.id),
+        )
+        .order_by(User.full_name)
+    )
+
+    # Add those students' presentations too, marked as a committee member's view.
+    for student in member_of:
+        for row in db.scalars(
+            select(StudentMilestone).where(
+                StudentMilestone.student_id == student.id
+            )
+        ):
+            milestone = milestone_by_id.get(row.milestone_id)
+
+            if milestone is None:
+                continue
+
+            presentation = advisor_presentation(
+                db, student, milestone, row.status
+            )
+
+            if presentation is not None:
+                presentation.role = "member"
+                presentations.append(presentation)
 
     return FacultyDashboardOut(
         faculty=FacultyProfile(
@@ -176,6 +228,7 @@ def get_faculty_dashboard(
         ),
         students=student_outputs,
         pending_reviews=pending_reviews,
+        presentations=presentations,
     )
 
 
@@ -211,6 +264,14 @@ def review_student_milestone(
         or progress.status not in REVIEW_STATUSES
     ):
         return None
+
+    # For the exam, proposal and defense, Approve before the presentation
+    # only approves the document, and the milestone isn't complete yet.
+    if new_status == MilestoneStatus.APPROVED and approve_document_if_needed(
+        db, faculty, student, progress, comment
+    ):
+        db.refresh(progress)
+        return progress
 
     progress.status = new_status
 

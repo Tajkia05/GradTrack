@@ -20,6 +20,8 @@ from sqlalchemy.orm import Session
 from app.modules.committee.service import sync_committee_milestone
 # The milestone tables.
 from app.modules.milestones.models import Milestone, MilestoneStatus, StudentMilestone
+# The presentation rules: the attempt limit, the attempt count and the popup's presentation part.
+from app.modules.presentations.service import MAX_ATTEMPTS, attempt_number, document_approved, presentation_state, rejection_count
 # The dashboard's rules for what's blocked.
 from app.modules.student.service import get_dashboard
 # Records a status change and tells the student and advisor.
@@ -70,8 +72,18 @@ def _submission_state(db: Session, student: User, milestone: Milestone):
     item = next(entry for entry in get_dashboard(db, student).milestones if entry.id == milestone.id)
     # Start with the prerequisites that aren't met.
     reasons = list(item.blocked_reasons)
+    # True while an approved document waits for its presentation. The presentation section explains this, so no reason is added.
+    waiting_for_presentation = document_approved(db, student.id, milestone.id, item.status)
+    # A rejection allows another attempt until the limit is reached.
+    if item.status == MilestoneStatus.REJECTED and rejection_count(db, student.id, milestone.id) < MAX_ATTEMPTS:
+        # Nothing to add: the student can upload for the next attempt.
+        pass
+    # The document is approved, so it can't be replaced before the presentation.
+    elif waiting_for_presentation:
+        # Nothing to add here.
+        pass
     # Add a reason if the status doesn't allow a submission.
-    if item.status not in SUBMIT_STATUSES:
+    elif item.status not in SUBMIT_STATUSES:
         # Each status has its own explanation.
         reasons.append({
             # Waiting for the advisor.
@@ -80,11 +92,11 @@ def _submission_state(db: Session, student: User, milestone: Milestone):
             MilestoneStatus.UNDER_REVIEW: "Your advisor is reviewing your submission.",
             # Nothing more to do.
             MilestoneStatus.APPROVED: "This milestone has been approved.",
-            # A rejection is final here.
-            MilestoneStatus.REJECTED: "This submission was rejected. Contact your advisor about next steps.",
+            # Both attempts were rejected, so no more are allowed.
+            MilestoneStatus.REJECTED: f"This milestone was rejected {MAX_ATTEMPTS} times, so no more attempts are allowed. Contact your advisor and the Program Director.",
         }[item.status])
     # Return the status, whether a submission is allowed, and the reasons if not.
-    return item.status, not reasons, reasons
+    return item.status, not reasons and not waiting_for_presentation, reasons
 
 
 # Builds the list of submissions and their files, newest first.
@@ -120,7 +132,12 @@ def get_submission(db: Session, student: User, milestone_id: int) -> SubmissionO
     return SubmissionOut(milestone_id=milestone.id, milestone_name=milestone.name, status=status.value, can_submit=can_submit, approved_at=approved_at,
                          # The reasons, the submissions and the history.
                          blocked_reasons=reasons, attempts=_attempts(db, student.id, milestone.id),
-                         history=[HistoryOut(status=row.status, changed_by=name, comment=row.comment, changed_at=row.changed_at) for row, name in history])
+                         history=[HistoryOut(status=row.status, changed_by=name, comment=row.comment, changed_at=row.changed_at) for row, name in history],
+                         # The attempt, its limit, and the presentation dates.
+                         attempt_number=min(attempt_number(db, student.id, milestone.id), MAX_ATTEMPTS), max_attempts=MAX_ATTEMPTS,
+                         # True while the approved document waits for its presentation.
+                         document_approved=document_approved(db, student.id, milestone.id, status),
+                         presentation=presentation_state(db, student, milestone, status))
 
 
 # Checks one file and returns its (clean name, browser type, contents).

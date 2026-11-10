@@ -6,6 +6,9 @@ from datetime import datetime
 # BaseModel describes the data, ConfigDict sets options, and Field adds limits to a field.
 from pydantic import BaseModel, ConfigDict, Field
 
+# The presentation part of the popup.
+from app.modules.presentations.schemas import PresentationState
+
 # A file's most text-encoded length: a 10 MB file is about 13.4 million characters, and the backend checks the exact size.
 MAX_ENCODED_LENGTH = 14_000_000
 
@@ -80,3 +83,11 @@ class SubmissionOut(BaseModel):
     attempts: list[AttemptOut]
     # The status changes, newest first.
     history: list[HistoryOut]
+    # 1 for the first attempt, 2 for the second attempt after a rejection.
+    attempt_number: int
+    # The most attempts allowed.
+    max_attempts: int
+    # True while the advisor-approved document waits for its presentation.
+    document_approved: bool
+    # The presentation dates and what the student can do about them.
+    presentation: PresentationState

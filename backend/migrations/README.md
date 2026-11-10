@@ -205,8 +205,9 @@ Their prerequisites come from the dashboard's rules. A student uploads up to 5 P
 PPTX or PNG files of up to 10 MB each, and the status becomes `submitted`, which puts the
 milestone on the advisor's review list. After a revision request, the student can submit
 again as a new attempt, and earlier attempts are kept. Files are stored in the database,
-so every teammate's backend can open them. Presentation dates aren't checked yet, so an
-advisor can record a decision before the presentation until scheduling is built.
+so every teammate's backend can open them. After a rejection, the student gets one more
+attempt, with a new upload and a new presentation. A second rejection is final. Presentation
+dates are covered under Presentation scheduling below.
 
 ## Faculty side (still to build)
 
@@ -230,3 +231,118 @@ in `app/modules/milestones/models.py`.
 `record_status_change` saves each milestone status change with its exact time, and
 notifies the student. The navbar's bell shows every user their notifications. Approvals
 from before this feature, and advisor declarations, show only a date.
+
+# Presentation scheduling
+
+## Migration
+
+Apply `013_create_presentations.sql` in the Neon SQL editor. It adds the `presentations`,
+`presentation_options` and `presentation_availability` tables, without changing existing data.
+Then apply `014_add_document_approval.sql`, which adds the empty `document_approved_at` column
+to `milestone_submissions`. Then apply `015_add_hybrid_presentations.sql`, which allows
+`hybrid` presentations and adds the empty `presentations.meeting_link` and
+`presentation_availability.attend_mode` columns.
+
+## How it works
+
+The comprehensive exam, dissertation proposal and dissertation defense each need a
+presentation, and their review has two steps:
+
+1. The student uploads the document, and the milestone is `submitted`.
+2. The advisor reviews the document with the usual buttons. **Approve** before the presentation
+   only approves the document: it sets `document_approved_at` on the newest submission, moves the
+   milestone to `under_review`, adds a `document_approved` history row, and tells the student. The
+   milestone is not complete, so nothing it unlocks opens yet. Revision and Reject work as before.
+3. The student proposes 1 to 3 dates, in person (a room), online (a Zoom link in `location`),
+   or hybrid (a room in `location` and a Zoom link in `meeting_link`).
+4. Every committee member, including the advisor, marks whether they can attend each date, and
+   how they'll join (`attend_mode`: `in_person` or `online`). Joining by Zoom only counts when the
+   presentation is online or hybrid, and joining in person only when it's in person or hybrid. The
+   student enters the answers for external members. Dates that everyone can attend are
+   highlighted, and the student chooses one of them, which notifies the advisor and the faculty
+   on the committee.
+5. After the chosen date has passed, **Approve** is the final decision and completes the
+   milestone, as before. Approving earlier is refused with a message giving the date.
+
+Approving the document before the presentation is the team's own step; the bulletin only says the
+document goes to the committee before the presentation. The earliest allowed date is:
+
+| Milestone | Earliest date (bulletin) |
+| --- | --- |
+| Comprehensive exam | Any future date |
+| Dissertation proposal | 2 weeks after the upload, and 1 month after the comprehensive exam presentation |
+| Dissertation defense | 1 month after the upload, and at least 1 week away, so it can be announced |
+
+For students whose exam was approved before scheduling existed, the exam's approval day is
+used instead of its presentation date. Proposing dates notifies the advisor and the faculty
+on the committee. External members have no account, so the student ticks which dates they
+can attend. The milestone stays `under_review` until the final decision, so it stays on the
+advisor's review list. The student can cancel before the date and propose new ones. Once the chosen date
+has passed, the presentation shows as held. After a revision request, the student uploads a
+revised document without presenting again. After a rejection, the second attempt needs its
+own presentation.
+
+## Faculty steps by hand
+
+Until the faculty side is built, do these steps in Neon, on test students only, because the
+database is shared. Find the presentation and its dates:
+
+```sql
+SELECT p.id AS presentation, u.email AS student, m.name AS milestone, p.attempt, p.status,
+       o.id AS option, o.starts_at
+FROM presentations p
+JOIN users u ON u.id = p.student_id
+JOIN milestones m ON m.id = p.milestone_id
+JOIN presentation_options o ON o.presentation_id = p.id
+ORDER BY p.id DESC, o.starts_at;
+```
+
+A faculty member's answer for one date. Use the faculty member's user id, and how they'll join
+(`'in_person'` or `'online'`, or `NULL` when they can't attend):
+
+```sql
+INSERT INTO presentation_availability (option_id, faculty_id, available, attend_mode)
+VALUES (1, 2, true, 'online');
+```
+
+Once every member has answered yes for a date, the student chooses it on the site. If the
+advisor says a presentation didn't take place, which asks the student for new dates:
+
+```sql
+UPDATE presentations SET status = 'needs_new_dates' WHERE id = 1;
+```
+
+To show a held presentation in a demo, move the chosen date into the past:
+
+```sql
+UPDATE presentation_options SET starts_at = now() - interval '1 day' WHERE id = 1;
+```
+
+A manual edit doesn't send a notification.
+
+## Faculty side (still to build)
+
+1. Show each committee faculty member, and the advisor, the dates their students proposed
+   (`presentations` with status `awaiting_availability`), and let them add or change their
+   own `presentation_availability` row for each date (`faculty_id` = their user id), with
+   Can't attend / In person / Zoom. Only offer the ways the presentation allows: in person
+   for `in_person`, Zoom for `online`, and both for `hybrid`.
+2. When a member answers, notify the student with a `Notification` that links to
+   `links.student_milestone(milestone_id)`. The student's page already highlights dates
+   everyone can attend and lets the student choose one.
+3. Add a "Didn't take place" button for the advisor after the date, which sets the
+   presentation's `status` to `needs_new_dates`.
+4. Already done in the backend: the review list leaves out a milestone whose document is
+   approved until its presentation date has passed (`waiting_for_presentation`), and an early
+   Approve is refused (`approve_document_if_needed`). Both are in
+   `app/modules/presentations/service.py`. Optionally, show these students' upcoming
+   presentation dates somewhere on the faculty dashboard.
+
+## Notifications
+
+| Event | Who is notified |
+| --- | --- |
+| Student proposes presentation dates | The advisor and the faculty on the committee |
+| Student chooses the presentation date | The advisor and the faculty on the committee |
+| Student cancels a presentation | The advisor and the faculty on the committee |
+| Advisor approves the document before the presentation | The student |
