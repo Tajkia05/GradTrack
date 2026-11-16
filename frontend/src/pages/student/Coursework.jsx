@@ -3,6 +3,7 @@
 
 // useEffect runs code when something changes, useRef keeps a value between draws, and useState remembers values on the page.
 import { useEffect, useRef, useState } from "react";
+import { Link } from "react-router-dom";
 // api is the one function that talks to the backend.
 import { api } from "../../api/client.js";
 // The app's own "are you sure?" box.
@@ -550,10 +551,12 @@ function CourseworkContent({ data, onUpdate }) {
               <span className="text-mist/60">{row.term === "fall" ? "Fall" : "Spring"} {row.year} · {row.credits} cr</span>
               {/* The grade, or "In progress" if there isn't one. */}
               <span className="rounded-full border border-line px-3 py-1 text-xs text-mist">{row.grade ?? "In progress"}</span>
+              {row.transfer_request_id ? <Link to={`/student/transfer-credits?request=${row.transfer_request_id}`} className="rounded-lg border border-sage/30 px-3 py-2 text-sm text-sage hover:bg-sage/10">Transferred credit · View decision</Link> : <>
               {/* Loads this course into the form above. */}
               <button type="button" onClick={() => startEditing(row)} aria-pressed={editingId === row.id} className={`rounded-md px-2 py-1 text-sage underline underline-offset-4 transition-colors hover:bg-sage/15 hover:text-sage-light ${editingId === row.id ? "bg-sage/15 font-semibold" : ""}`}>{editingId === row.id ? "Editing" : "Edit"}</button>
               {/* Removes this course. */}
               <button type="button" disabled={saving} onClick={() => setRowToRemove(row)} className="rounded-md px-2 py-1 text-mist/70 underline underline-offset-4 transition-colors hover:bg-white/10 hover:text-white disabled:opacity-50">Remove</button>
+              </>}
             </li>
           ))}
         </ul>

@@ -22,6 +22,7 @@ import FacultyDashboard from "./pages/faculty/FacultyDashboard.jsx";
 import FacultyProfile from "./pages/faculty/FacultyProfile.jsx";
 import StudentProgress from "./pages/faculty/StudentProgress.jsx";
 
+import TransferCredits from "./pages/transferCredits/TransferCredits.jsx";
 import DirectorDashboard from "./pages/director/DirectorDashboard.jsx";
 
 
@@ -60,6 +61,11 @@ export default function App() {
             <Route
               path="/student"
               element={<StudentDashboard />}
+            />
+
+            <Route
+              path="/student/transfer-credits"
+              element={<TransferCredits />}
             />
 
             <Route
