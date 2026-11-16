@@ -22,6 +22,8 @@ from app.modules.profile.router import router as profile_router
 # The presentation scheduling endpoints.
 from app.modules.presentations.router import router as presentations_router
 
+from app.modules.transfer_credits.router import router as transfer_credits_router
+
 # Create the backend app.
 app = FastAPI(title="GradTrack API")
 
@@ -53,6 +55,7 @@ app.include_router(submissions_router, prefix="/api")
 app.include_router(profile_router, prefix="/api")
 # Plug in the presentation scheduling endpoints.
 app.include_router(presentations_router, prefix="/api")
+app.include_router(transfer_credits_router, prefix="/api")
 
 
 # A simple "is the server running?" check. Visit /api/health to test.

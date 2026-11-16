@@ -20,6 +20,7 @@ from sqlalchemy import inspect, select
 from app.core.database import Base, SessionLocal, engine
 # The course list and the courses each student selected.
 from app.modules.coursework.models import Course, StudentCourse
+from app.modules.transfer_credits import models as transfer_credit_models  # Register foreign-key targets.
 # Sets a student's stored GPA from their courses.
 from app.modules.coursework.service import update_gpa
 from app.modules.faculty.models import FacultyProfile  # Register table for fresh development databases.

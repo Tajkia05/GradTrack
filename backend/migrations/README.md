@@ -346,3 +346,42 @@ A manual edit doesn't send a notification.
 | Student chooses the presentation date | The advisor and the faculty on the committee |
 | Student cancels a presentation | The advisor and the faculty on the committee |
 | Advisor approves the document before the presentation | The student |
+
+## Transfer credit review
+
+Apply `016_create_transfer_credits.sql` after migrations 001–015 before deploying this version.
+The script is additive and repeatable. It creates requests, versioned submissions, documents
+and history, and adds nullable transfer metadata to `student_courses`. Existing course rows
+remain ordinary coursework. Do not reset or reseed the shared database.
+
+Students with advanced standing open **Manage transfer credits** on their dashboard.
+One request contains one prior course, completion date, grade, requested allocation and
+1–5 supporting documents (PDF/DOCX/PPTX/PNG, 10 MiB each). A course must be completed within
+five calendar years of submission, inclusive. A later review does not invalidate it.
+Each resubmission is checked at its own submission date and preserves previous versions.
+Rejected requests are final. Requests for more information can be edited and resubmitted.
+
+The Director Dashboard lists requests and supports approval, rejection and requests for more
+information. Comments are mandatory for rejection, additional information and any allocation
+adjustment. Approval is final and creates one immutable coursework row linked to the request.
+Student and director notifications link directly to the request.
+
+Core requires an equivalent core course. Breadth requires one of the existing three areas
+and at least 3 credits; an equivalent course may also be selected. Elective equivalence is
+optional. CSI 790 and CSI 898 cannot be transferred. Core/Breadth require B or better or S.
+Other grades follow Coursework's existing credit rules. S earns credit without grade points.
+The existing 6/9/30 category requirements, 3.3 core/breadth average and 15-credit research
+elective cap still apply. There is no additional aggregate transfer-credit cap. Each course
+uses the existing integer 1–19 credit range; recognized credits cannot exceed the request.
+
+Approvals and course mutations serialize on the student row. A unique request/course link
+prevents repeated application, and a version check refuses stale decisions. Duplicate source
+institution/course requests are refused. Equivalent courses and matching course codes are
+checked against local coursework in both directions. Academic equivalence between differently
+named courses remains the director's review responsibility.
+
+Approved credit recalculates Coursework, GPA and Candidacy in the same transaction as the
+review. Credentials and documents are accessed through the existing role guards. The migration
+is provided for manual execution in Neon; the automated tests use isolated SQLite fixtures.
+
+Run from backend: `python -m unittest discover -s tests -v`.

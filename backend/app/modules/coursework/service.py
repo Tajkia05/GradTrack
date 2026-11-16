@@ -206,6 +206,14 @@ def _load_rows(db: Session, student: User):
             # Build its course details. With no area, it can only count as an elective.
             course = SimpleNamespace(id=f"manual:{row.manual_code}", code=row.manual_code, title=row.manual_title,
                                      min_credits=None, max_credits=None, area=None, is_research=row.manual_is_research)
+        if row.transfer_request_id is not None:
+            # Keep equivalence identity for duplicate detection, but use the director's allocation.
+            course = SimpleNamespace(
+                id=row.course_id if row.course_id else f"transfer:{row.transfer_request_id}",
+                code=course.code, title=course.title, min_credits=course.min_credits,
+                max_credits=course.max_credits, area=row.transfer_area,
+                is_research=row.manual_is_research,
+            )
         # Add the row with its course.
         rows.append((row, course))
     # Return the finished list.
@@ -323,9 +331,11 @@ def get_coursework(db: Session, student: User) -> CourseworkOut:
         # Convert each course for the dropdown.
         courses=[CourseOut.model_validate(course) for course in courses],
         # Combine each student row with its course's details.
-        my_courses=[StudentCourseOut(id=row.id, course_id=row.course_id, code=course.code, title=course.title,
+        my_courses=[StudentCourseOut(id=row.id, course_id=row.course_id, code=row.manual_code if row.transfer_request_id else course.code,
+                                     title=row.manual_title if row.transfer_request_id else course.title,
+                                     transfer_request_id=row.transfer_request_id,
                                      min_credits=course.min_credits, max_credits=course.max_credits,
-                                     is_manual=row.course_id is None, department=row.manual_department,
+                                     is_manual=row.course_id is None and row.transfer_request_id is None, department=row.manual_department,
                                      is_research=row.manual_is_research,
                                      credits=row.credits, term=row.term, year=row.year, grade=row.grade, note=notes.get(row.id))
                     for row, course in rows],
@@ -467,10 +477,29 @@ def _update_milestone(db: Session, student: User) -> None:
             record_status_change(db, student.id, milestone.id, MilestoneStatus.IN_PROGRESS, student.id)
 
 
+def lock_student_courses(db: Session, student: User) -> None:
+    # Serialize mutations with transfer approvals, including changes in separate requests.
+    db.scalar(select(User).where(User.id == student.id).with_for_update())
+
+
+def check_transfer_duplicate(db: Session, student: User, body: StudentCourseIn) -> None:
+    course = db.get(Course, body.course_id) if body.course_id else None
+    code = "".join((course.code if course else body.manual_code).upper().split())
+    rows = db.execute(select(StudentCourse, Course).outerjoin(Course).where(
+        StudentCourse.student_id == student.id, StudentCourse.transfer_request_id.is_not(None)))
+    for row, equivalent in rows:
+        existing_codes = {"".join((row.manual_code or "").upper().split()),
+                          "".join(equivalent.code.upper().split()) if equivalent else ""}
+        if code in existing_codes or (body.course_id is not None and body.course_id == row.course_id):
+            raise HTTPException(409, "This course already has approved transfer credit.")
+
+
 # Adds a course for the logged-in student.
 def add_course(db: Session, student: User, body: StudentCourseIn) -> CourseworkOut:
+    lock_student_courses(db, student)
     # Check the course and credits first.
     _check_course(db, body)
+    check_transfer_duplicate(db, student, body)
     # Add the row, using the student from the login token.
     db.add(StudentCourse(student_id=student.id, **body.model_dump()))
     # Save the course and update the milestone together.
@@ -487,16 +516,20 @@ def _get_own_row(db: Session, student: User, row_id: int) -> StudentCourse:
     if row is None:
         # 404 means not found.
         raise HTTPException(404, "Course not found. Refresh the page.")
+    if row.transfer_request_id is not None:
+        raise HTTPException(409, "Approved transfer credits cannot be edited or removed from Coursework.")
     # Return the row.
     return row
 
 
 # Edits one of the logged-in student's courses.
 def update_course(db: Session, student: User, row_id: int, body: StudentCourseIn) -> CourseworkOut:
+    lock_student_courses(db, student)
     # Make sure the row belongs to this student.
     row = _get_own_row(db, student, row_id)
     # Check the new course and credits.
     _check_course(db, body)
+    check_transfer_duplicate(db, student, body)
     # Go through each submitted field.
     for field, value in body.model_dump().items():
         # Copy the new value onto the row.
@@ -509,6 +542,7 @@ def update_course(db: Session, student: User, row_id: int, body: StudentCourseIn
 
 # Removes one of the logged-in student's courses.
 def delete_course(db: Session, student: User, row_id: int) -> CourseworkOut:
+    lock_student_courses(db, student)
     # Make sure the row belongs to this student, then mark it for deletion.
     db.delete(_get_own_row(db, student, row_id))
     # Save the deletion and update the milestone together.
