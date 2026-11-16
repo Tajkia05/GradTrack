@@ -63,3 +63,7 @@ class StudentCourse(Base):
     year: Mapped[int]
     # The grade, e.g. "A-". Empty = still in progress, so it doesn't count yet.
     grade: Mapped[str | None] = mapped_column(String(2))
+
+    # Approved transfers are immutable coursework rows linked to their review.
+    transfer_request_id: Mapped[int | None] = mapped_column(ForeignKey("transfer_credit_requests.id"), unique=True)
+    transfer_area: Mapped[str | None] = mapped_column(String(20))

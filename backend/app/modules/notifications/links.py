@@ -36,3 +36,11 @@ def student_committee(db: Session) -> str | None:
     milestone_id = db.scalar(select(Milestone.id).where(Milestone.name == "Committee formation"))
     # Build the link, or leave it empty if the milestone hasn't been set up.
     return student_milestone(milestone_id) if milestone_id else None
+
+
+def student_transfer(request_id: int) -> str:
+    return f"/student/transfer-credits?request={request_id}"
+
+
+def director_transfer(request_id: int) -> str:
+    return f"/program_director?request={request_id}"

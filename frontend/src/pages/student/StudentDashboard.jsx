@@ -1,7 +1,7 @@
 // Student progress comes from the API; prerequisites and deadlines are calculated there.
 import { useEffect, useRef, useState } from "react";
 // useLocation reads which milestone a notification opened.
-import { useLocation } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import { api } from "../../api/client.js";
 // Shows a short success message.
 import { useToast } from "../../components/Toast.jsx";
@@ -283,7 +283,8 @@ export default function StudentDashboard() {
       {student.advanced_standing && <footer className="border-t border-line pt-6">
         <div className="rounded-xl border border-line bg-panel p-4">
           <h2 className="font-display font-semibold text-mist">Transfer credit</h2>
-          <p className="mt-1 text-xs text-mist/50">Transfer credit requests are coming soon.</p>
+          <p className="mt-1 text-sm text-mist/65">Request credit for prior coursework and track your Program Director’s decision.</p>
+          <Link to="/student/transfer-credits" className="mt-3 inline-block cursor-pointer rounded-lg border border-sage/40 bg-sage/10 px-4 py-2 text-sm font-medium text-sage hover:bg-sage/20">Manage transfer credits</Link>
         </div>
       </footer>}
     </div>

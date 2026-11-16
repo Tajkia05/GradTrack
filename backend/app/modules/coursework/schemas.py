@@ -108,6 +108,7 @@ class StudentCourseOut(BaseModel):
     grade: str | None
     # Why this course counts differently than expected. Empty when it counts as normal.
     note: str | None
+    transfer_request_id: int | None = None
 
 
 # The progress for one requirement group, shown as one progress bar.

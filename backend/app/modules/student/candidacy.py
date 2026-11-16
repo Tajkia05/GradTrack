@@ -22,7 +22,7 @@ from app.modules.users.models import User
 
 
 # Saves Candidacy's status from its conditions. It only saves if something changed.
-def sync_candidacy_milestone(db: Session, student: User) -> None:
+def sync_candidacy_milestone(db: Session, student: User, *, commit: bool = True) -> None:
     # Find the Candidacy milestone.
     milestone = db.scalar(select(Milestone).where(Milestone.name == "Candidacy"))
     # Do nothing if it hasn't been set up.
@@ -62,4 +62,5 @@ def sync_candidacy_milestone(db: Session, student: User) -> None:
     # Record the change with its exact time, and tell the student.
     record_status_change(db, student.id, milestone.id, progress.status, student.id)
     # Save everything together.
-    db.commit()
+    if commit:
+        db.commit()
