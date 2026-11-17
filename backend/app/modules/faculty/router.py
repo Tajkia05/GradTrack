@@ -1,4 +1,4 @@
-"""Faculty dashboard, profile, student progress, and review API."""
+"""Faculty dashboard, profile, student progress, review, and presentation API."""
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
@@ -27,10 +27,20 @@ from app.modules.faculty.service import (
     save_faculty_profile,
 )
 from app.modules.milestones.models import MilestoneStatus
+from app.modules.presentations.schemas import FacultyAvailabilityIn
+from app.modules.presentations.service import (
+    mark_presentation_not_held,
+    set_faculty_availability,
+)
 from app.modules.users.models import Role, User
 
 
 router = APIRouter(tags=["Faculty"])
+
+
+# ============================================================
+# FACULTY DASHBOARD
+# ============================================================
 
 
 @router.get(
@@ -46,6 +56,11 @@ def my_dashboard(
         db,
         faculty,
     )
+
+
+# ============================================================
+# FACULTY PROFILE
+# ============================================================
 
 
 @router.get(
@@ -80,6 +95,11 @@ def update_my_profile(
     )
 
 
+# ============================================================
+# STUDENT PROGRESS
+# ============================================================
+
+
 @router.get(
     "/faculty/students/{student_id}/progress",
     response_model=FacultyStudentProgressOut,
@@ -106,6 +126,11 @@ def student_progress(
         )
 
     return progress
+
+
+# ============================================================
+# MILESTONE REVIEW
+# ============================================================
 
 
 @router.patch(
@@ -157,6 +182,93 @@ def review_milestone(
     }
 
 
+# ============================================================
+# PRESENTATION AVAILABILITY
+# ============================================================
+
+
+@router.put(
+    "/faculty/students/{student_id}/milestones/"
+    "{milestone_id}/presentation/options/"
+    "{option_id}/availability"
+)
+def update_presentation_availability(
+    student_id: int,
+    milestone_id: int,
+    option_id: int,
+    body: FacultyAvailabilityIn,
+    faculty: User = Depends(require_role(Role.FACULTY)),
+    db: Session = Depends(get_db),
+):
+    """
+    Save or update the logged-in faculty member's availability
+    for one proposed presentation date.
+
+    The faculty member must be either:
+    - the student's advisor, or
+    - an approved faculty committee member.
+
+    Allowed responses depend on the presentation mode.
+    """
+    answer = set_faculty_availability(
+        db=db,
+        faculty=faculty,
+        student_id=student_id,
+        milestone_id=milestone_id,
+        option_id=option_id,
+        available=body.available,
+        attend_mode=body.attend_mode,
+    )
+
+    return {
+        "option_id": answer.option_id,
+        "faculty_id": answer.faculty_id,
+        "available": answer.available,
+        "attend_mode": answer.attend_mode,
+    }
+
+
+# ============================================================
+# PRESENTATION DID NOT TAKE PLACE
+# ============================================================
+
+
+@router.patch(
+    "/faculty/students/{student_id}/milestones/"
+    "{milestone_id}/presentation/did-not-take-place"
+)
+def presentation_did_not_take_place(
+    student_id: int,
+    milestone_id: int,
+    faculty: User = Depends(require_role(Role.FACULTY)),
+    db: Session = Depends(get_db),
+):
+    """
+    Mark a presentation as not having taken place.
+
+    Only the student's advisor may do this, and only after
+    the scheduled presentation date has passed.
+    """
+    presentation = mark_presentation_not_held(
+        db=db,
+        faculty=faculty,
+        student_id=student_id,
+        milestone_id=milestone_id,
+    )
+
+    return {
+        "presentation_id": presentation.id,
+        "student_id": presentation.student_id,
+        "milestone_id": presentation.milestone_id,
+        "status": presentation.status,
+    }
+
+
+# ============================================================
+# COMMITTEE INVITATIONS
+# ============================================================
+
+
 @router.get(
     "/faculty/me/committee-invitations",
     response_model=list[CommitteeInvitationOut],
@@ -182,7 +294,10 @@ def respond_to_invitation(
     db: Session = Depends(get_db),
 ):
     """Approve or decline a committee invitation."""
-    if body.status not in {"approved", "declined"}:
+    if body.status not in {
+        "approved",
+        "declined",
+    }:
         raise HTTPException(
             status_code=400,
             detail=(
@@ -212,6 +327,11 @@ def respond_to_invitation(
         "student_id": invitation.student_id,
         "status": invitation.status,
     }
+
+
+# ============================================================
+# COMMITTEE MEMBERSHIPS
+# ============================================================
 
 
 @router.get(
@@ -256,4 +376,3 @@ def leave_committee_membership(
     return {
         "message": "You have left the committee."
     }
-    

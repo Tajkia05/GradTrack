@@ -1,148 +1,309 @@
-# presentations/schemas.py — THE DATA THE API ACCEPTS AND RETURNS FOR PRESENTATION SCHEDULING.
+# presentations/schemas.py — THE DATA THE API ACCEPTS AND RETURNS
+# FOR PRESENTATION SCHEDULING.
 
-# datetime is a date and time.
 from datetime import datetime
-# Literal limits a field to a few fixed values.
 from typing import Literal
 
-# AwareDatetime only accepts a date and time with its time zone, BaseModel describes the data, ConfigDict sets options, and Field adds limits.
-from pydantic import AwareDatetime, BaseModel, ConfigDict, Field
+from pydantic import (
+    AwareDatetime,
+    BaseModel,
+    ConfigDict,
+    Field,
+)
+
+
+# ============================================================
+# STUDENT: PROPOSING PRESENTATION DATES
+# ============================================================
 
 
 # One date the student proposes.
 class OptionIn(BaseModel):
-    # The date and time, with its time zone, so it means the same moment for everyone.
+    # Date and time with its time zone.
     starts_at: AwareDatetime
-    # The external committee members who said they can attend on this date.
-    external_member_ids: list[int] = Field(default_factory=list, max_length=10)
-    # Of those, the ones joining by Zoom. Only for a hybrid presentation; online means everyone joins by Zoom.
-    external_online_ids: list[int] = Field(default_factory=list, max_length=10)
 
-    # Rejects any field that isn't listed above.
+    # External committee members who can attend this date.
+    external_member_ids: list[int] = Field(
+        default_factory=list,
+        max_length=10,
+    )
+
+    # External members who will join by Zoom.
+    # Used for hybrid presentations.
+    external_online_ids: list[int] = Field(
+        default_factory=list,
+        max_length=10,
+    )
+
     model_config = ConfigDict(extra="forbid")
 
 
-# What the page sends to propose presentation dates.
+# What the student sends when proposing presentation dates.
 class PresentationIn(BaseModel):
-    # In person, online, or hybrid (a room, with a Zoom link for those joining online).
-    mode: Literal["in_person", "online", "hybrid"]
-    # A room for in person or hybrid, or a meeting link for online.
-    location: str = Field(min_length=1, max_length=255)
-    # The Zoom link for a hybrid presentation. Leave it out otherwise.
-    meeting_link: str | None = Field(default=None, max_length=255)
-    # 1 to 3 proposed dates.
-    options: list[OptionIn] = Field(min_length=1, max_length=3)
+    # In person, online, or hybrid.
+    mode: Literal[
+        "in_person",
+        "online",
+        "hybrid",
+    ]
 
-    # Rejects any field that isn't listed above.
+    # Room for in-person/hybrid presentations,
+    # or meeting link for online presentations.
+    location: str = Field(
+        min_length=1,
+        max_length=255,
+    )
+
+    # Zoom link for a hybrid presentation.
+    meeting_link: str | None = Field(
+        default=None,
+        max_length=255,
+    )
+
+    # The student may propose 1 to 3 dates.
+    options: list[OptionIn] = Field(
+        min_length=1,
+        max_length=3,
+    )
+
     model_config = ConfigDict(extra="forbid")
 
 
-# What the page sends when the student chooses the date.
+# What the student sends when choosing the final date.
 class DateChoiceIn(BaseModel):
-    # The proposed date's id.
     option_id: int = Field(gt=0)
 
-    # Rejects any field that isn't listed above.
     model_config = ConfigDict(extra="forbid")
 
 
-# One committee member's answer for one date.
+# ============================================================
+# PRESENTATION AVAILABILITY
+# ============================================================
+
+
+# One committee member's answer for one proposed date.
 class ResponseOut(BaseModel):
-    # The member's name.
+    # Committee member's name.
     name: str
+
     # True if they can attend.
     available: bool
-    # How they'll join: "in_person" or "online". Empty when they can't attend, or it wasn't given.
-    attend_mode: Literal["in_person", "online"] | None = None
+
+    # How they will attend.
+    # Empty when they cannot attend.
+    attend_mode: Literal[
+        "in_person",
+        "online",
+    ] | None = None
 
 
-# One proposed date and the answers so far.
+# One proposed date and all committee answers so far.
 class OptionOut(BaseModel):
-    # The option's id.
+    # Proposed date ID.
     id: int
-    # The date and time.
+
+    # Date and time.
     starts_at: datetime
-    # True if the advisor confirmed this date.
+
+    # True if this is the final selected date.
     chosen: bool
-    # The committee members' answers so far.
+
+    # Committee answers received so far.
     responses: list[ResponseOut]
-    # True if everyone on the committee, including the advisor, can attend, so the student can choose it.
+
+    # True when everyone required can attend this date.
     everyone_available: bool
-    # The committee members who haven't answered for this date yet.
+
+    # Committee members who have not answered yet.
     waiting_for: list[str]
 
 
-# The presentation shown in the submission popup.
+# ============================================================
+# STUDENT: PRESENTATION OUTPUT
+# ============================================================
+
+
+# Presentation shown on the student's milestone page.
 class PresentationOut(BaseModel):
-    # The presentation's id.
+    # Presentation ID.
     id: int
-    # 1 for the first attempt, 2 for the second.
+
+    # First or second attempt.
     attempt: int
-    # Where the scheduling is. "held" means the confirmed date has passed.
-    status: Literal["awaiting_availability", "needs_new_dates", "scheduled", "held", "cancelled"]
-    # In person, online, or hybrid.
-    mode: Literal["in_person", "online", "hybrid"]
-    # A room, or a meeting link for online.
+
+    # Current scheduling status.
+    # "held" is shown when the selected date has passed.
+    status: Literal[
+        "awaiting_availability",
+        "needs_new_dates",
+        "scheduled",
+        "held",
+        "cancelled",
+    ]
+
+    # Presentation format.
+    mode: Literal[
+        "in_person",
+        "online",
+        "hybrid",
+    ]
+
+    # Room or online meeting link.
     location: str
-    # The Zoom link for a hybrid presentation. Empty otherwise.
+
+    # Zoom link for hybrid presentations.
     meeting_link: str | None = None
-    # The confirmed date and time. Empty until the advisor confirms one.
+
+    # Confirmed presentation date.
     scheduled_at: datetime | None
-    # The proposed dates, earliest first.
+
+    # Proposed dates.
     options: list[OptionOut]
 
 
-# An external committee member, so the student can enter which dates they can attend.
+# External committee member shown while the student
+# enters availability.
 class ExternalMemberOut(BaseModel):
-    # The member's row id.
     id: int
-    # The member's name.
     name: str
 
 
-# One student's presentation on the advisor's dashboard, with the stage it's at.
+# ============================================================
+# FACULTY: AVAILABILITY INPUT AND OUTPUT
+# ============================================================
+
+
+# What a faculty member sends when answering one proposed date.
+class FacultyAvailabilityIn(BaseModel):
+    # True if the faculty member can attend.
+    available: bool
+
+    # How they will attend.
+    # Must be empty when available is False.
+    attend_mode: Literal[
+        "in_person",
+        "online",
+    ] | None = None
+
+    model_config = ConfigDict(extra="forbid")
+
+
+# The logged-in faculty member's saved answer.
+class FacultyAvailabilityOut(BaseModel):
+    available: bool
+
+    attend_mode: Literal[
+        "in_person",
+        "online",
+    ] | None = None
+
+
+# One proposed date shown on the faculty dashboard.
+class FacultyOptionOut(BaseModel):
+    # Proposed date ID.
+    id: int
+
+    # Proposed date and time.
+    starts_at: datetime
+
+    # This logged-in faculty member's current answer.
+    # None means they have not answered yet.
+    my_response: FacultyAvailabilityOut | None = None
+
+    # Committee members who still need to answer.
+    waiting_for: list[str] = Field(
+        default_factory=list,
+    )
+
+
+# ============================================================
+# FACULTY: PRESENTATION DASHBOARD
+# ============================================================
+
+
+# One student's presentation shown on the faculty dashboard.
 class AdvisorPresentationOut(BaseModel):
-    # The student's id.
+    # Student information.
     student_id: int
-    # The student's name.
     student_name: str
-    # The milestone's id.
+
+    # Milestone information.
     milestone_id: int
-    # The milestone's name.
     milestone_name: str
-    # Where it is: waiting for dates, waiting for availability, new dates needed, upcoming, done, or waiting for a revision.
-    stage: Literal["waiting_for_dates", "awaiting_availability", "needs_new_dates", "scheduled", "held", "revision_requested"]
-    # The chosen date, once there is one.
+
+    # Current presentation stage.
+    stage: Literal[
+        "waiting_for_dates",
+        "awaiting_availability",
+        "needs_new_dates",
+        "scheduled",
+        "held",
+        "revision_requested",
+    ]
+
+    # Final selected date, once one has been chosen.
     scheduled_at: datetime | None
-    # In person, online or hybrid, once dates are proposed.
-    mode: Literal["in_person", "online", "hybrid"] | None
-    # The room or link, once dates are proposed.
+
+    # Presentation format once dates have been proposed.
+    mode: Literal[
+        "in_person",
+        "online",
+        "hybrid",
+    ] | None
+
+    # Room or online meeting link.
     location: str | None
-    # The Zoom link for a hybrid presentation. Empty otherwise.
+
+    # Zoom link for hybrid presentations.
     meeting_link: str | None = None
-    # How many dates were proposed.
+
+    # Number of proposed dates.
     option_count: int
-    # "advisor" if the viewer advises this student and records the decision, or "member" if they're on the committee.
-    role: Literal["advisor", "member"] = "advisor"
+
+    # Proposed dates and the logged-in faculty member's
+    # availability responses.
+    options: list[FacultyOptionOut] = Field(
+        default_factory=list,
+    )
+
+    # Advisor records the final decision.
+    # Committee members only provide availability.
+    role: Literal[
+        "advisor",
+        "member",
+    ] = "advisor"
 
 
-# A short version for the dashboard card.
+# ============================================================
+# DASHBOARD SUMMARY
+# ============================================================
+
+
+# Short presentation information used by milestone cards.
 class PresentationSummary(BaseModel):
-    # Where the scheduling is, the same values as above.
     status: str
-    # The confirmed date and time, if there is one.
     scheduled_at: datetime | None
 
 
-# Everything the popup needs to show and propose presentation dates.
+# ============================================================
+# STUDENT PRESENTATION STATE
+# ============================================================
+
+
+# Everything the student's presentation scheduling page needs.
 class PresentationState(BaseModel):
-    # The current presentation for this attempt. Empty if no dates have been proposed.
+    # Current presentation for this attempt.
     presentation: PresentationOut | None
-    # True if the student can propose dates right now.
+
+    # Whether the student may propose dates now.
     can_propose: bool
-    # Why the student can't propose dates, or what to do next. Empty when there's nothing to say.
+
+    # Explanation or next action.
     message: str | None
-    # The earliest date the student may propose. Empty when they can't propose.
+
+    # Earliest allowed proposed date.
     earliest_at: datetime | None
-    # The external members who need their availability entered by the student.
+
+    # External committee members whose availability
+    # the student enters.
     external_members: list[ExternalMemberOut]

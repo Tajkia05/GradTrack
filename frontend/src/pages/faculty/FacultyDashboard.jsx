@@ -90,6 +90,16 @@ export default function FacultyDashboard() {
   const [membershipToLeave, setMembershipToLeave] =
     useState(null);
 
+  // Presentation availability and reset state.
+  const [savingAvailability, setSavingAvailability] =
+    useState("");
+  const [presentationError, setPresentationError] =
+    useState("");
+  const [presentationToReset, setPresentationToReset] =
+    useState(null);
+  const [resettingPresentation, setResettingPresentation] =
+    useState(false);
+
   // The address bar, which holds the item a notification opened.
   const location = useLocation();
 
@@ -534,6 +544,77 @@ export default function FacultyDashboard() {
   }
 
 
+  async function handlePresentationAvailability(
+    item,
+    option,
+    available,
+    attendMode
+  ) {
+    const key =
+      `${item.student_id}-${item.milestone_id}-${option.id}`;
+
+    setSavingAvailability(key);
+    setPresentationError("");
+
+    try {
+      await api(
+        `/faculty/students/${item.student_id}/milestones/${item.milestone_id}/presentation/options/${option.id}/availability`,
+        {
+          method: "PUT",
+          body: JSON.stringify({
+            available,
+            attend_mode: available ? attendMode : null,
+          }),
+        }
+      );
+
+      showToast(
+        available
+          ? `Availability saved: ${attendMode === "online" ? "Zoom" : "in person"}.`
+          : "Availability saved: can't attend."
+      );
+
+      setAttempt((value) => value + 1);
+    } catch (err) {
+      setPresentationError(err.message);
+    } finally {
+      setSavingAvailability("");
+    }
+  }
+
+
+  async function handlePresentationNotHeld() {
+    const item = presentationToReset;
+
+    if (!item) {
+      return;
+    }
+
+    setPresentationToReset(null);
+    setResettingPresentation(true);
+    setPresentationError("");
+
+    try {
+      await api(
+        `/faculty/students/${item.student_id}/milestones/${item.milestone_id}/presentation/did-not-take-place`,
+        {
+          method: "PATCH",
+        }
+      );
+
+      showToast(
+        `${item.student_name}'s ${item.milestone_name} was marked as not having taken place. The student can propose new dates.`
+      );
+
+      setAttempt((value) => value + 1);
+    } catch (err) {
+      setPresentationError(err.message);
+    } finally {
+      setResettingPresentation(false);
+    }
+  }
+
+
   if (error) {
     return (
       <div
@@ -881,15 +962,12 @@ export default function FacultyDashboard() {
       </section>
 
 
-      {/* The advisees' exam, proposal and defense presentations, with what happens next. */}
+      {/* Exam, proposal and defense presentations for advisees and committee students. */}
       <section
         id="section-presentations"
         aria-labelledby="presentations-title"
-        className={highlightClass(
-          "section-presentations"
-        )}
+        className={highlightClass("section-presentations")}
       >
-        {/* The heading and count. */}
         <div className="mb-3 flex items-center gap-2">
           <h2
             id="presentations-title"
@@ -903,82 +981,217 @@ export default function FacultyDashboard() {
           </span>
         </div>
 
+        {presentationError && (
+          <p
+            role="alert"
+            className="mb-3 rounded-xl border border-red-400/30 bg-red-400/10 px-4 py-3 text-sm text-red-200"
+          >
+            {presentationError}
+          </p>
+        )}
+
         {presentations.length > 0 ? (
           <div className="space-y-3">
             {presentations.map((item) => {
-              // The stage's badge and next step.
               const stage = PRESENTATION_STAGES[item.stage];
-              // True once the presentation has taken place.
-              const done = item.stage === "held" || item.stage === "revision_requested";
-              // True for the student's advisor. Older backends don't send a role, and only listed advisees.
-              const isAdvisor = (item.role ?? "advisor") === "advisor";
+              const done =
+                item.stage === "held" ||
+                item.stage === "revision_requested";
+              const isAdvisor =
+                (item.role ?? "advisor") === "advisor";
 
               return (
-                // One card per presentation, outlined in green once it's done.
                 <div
                   key={`${item.student_id}-${item.milestone_id}`}
-                  className={`rounded-xl border bg-panel p-4 ${done ? "border-sage/50" : "border-line"}`}
+                  className={`rounded-xl border bg-panel p-4 ${
+                    done ? "border-sage/50" : "border-line"
+                  }`}
                 >
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div>
-                      {/* The student and milestone. */}
                       <h3 className="font-display font-semibold text-white">
                         {item.student_name}
                       </h3>
                       <p className="mt-1 text-sm text-mist/65">
                         {item.milestone_name}
-                        {/* Says whether the viewer advises the student or is on the committee. */}
-                        {isAdvisor ? " · You're the advisor" : " · You're on the committee"}
+                        {isAdvisor
+                          ? " · You're the advisor"
+                          : " · You're on the committee"}
                       </p>
                     </div>
 
-                    {/* The stage. */}
-                    <span className={`rounded-full border px-3 py-1 text-xs font-semibold ${stage.tone}`}>
+                    <span
+                      className={`rounded-full border px-3 py-1 text-xs font-semibold ${stage.tone}`}
+                    >
                       {stage.badge}
                     </span>
                   </div>
 
-                  {/* The date and place, once a date is chosen. */}
                   {item.scheduled_at && (
                     <p className="mt-3 text-sm text-white">
                       {done ? "Held on " : ""}
                       {formatPresentationDate(item.scheduled_at)}
                       {" · "}
                       {item.mode === "online" ? (
-                        // An online presentation links to its meeting.
-                        <a href={item.location} target="_blank" rel="noopener noreferrer" className="break-all text-sage underline underline-offset-4 hover:text-sage-light">
+                        <a
+                          href={item.location}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="break-all text-sage underline underline-offset-4 hover:text-sage-light"
+                        >
                           Zoom meeting
                         </a>
                       ) : item.mode === "hybrid" ? (
-                        // A hybrid shows the room and links to the Zoom meeting.
                         <>
                           {item.location}
                           {" or "}
-                          <a href={item.meeting_link} target="_blank" rel="noopener noreferrer" className="break-all text-sage underline underline-offset-4 hover:text-sage-light">
+                          <a
+                            href={item.meeting_link}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="break-all text-sage underline underline-offset-4 hover:text-sage-light"
+                          >
                             join by Zoom
                           </a>
                         </>
                       ) : (
-                        // An in-person presentation shows its room.
                         item.location
                       )}
                     </p>
                   )}
 
-                  {/* What happens next. */}
                   <p className="mt-2 text-sm text-mist/80">
                     {stage.next(item, isAdvisor)}
                   </p>
 
-                  {/* After the presentation, the advisor goes straight to the decision. */}
+                  {item.stage === "awaiting_availability" &&
+                    item.options?.length > 0 && (
+                      <div className="mt-4 space-y-3">
+                        {item.options.map((option) => {
+                          const optionKey =
+                            `${item.student_id}-${item.milestone_id}-${option.id}`;
+                          const isSaving =
+                            savingAvailability === optionKey;
+                          const response = option.my_response;
+                          const selected = !response
+                            ? null
+                            : response.available
+                              ? response.attend_mode
+                              : "unavailable";
+
+                          return (
+                            <div
+                              key={option.id}
+                              className="rounded-xl border border-line/70 bg-ink/20 p-4"
+                            >
+                              <p className="text-sm font-semibold text-white">
+                                {formatPresentationDate(option.starts_at)}
+                              </p>
+
+                              <p className="mt-1 text-xs text-mist/55">
+                                {option.waiting_for?.length
+                                  ? `Waiting for: ${option.waiting_for.join(", ")}`
+                                  : "Everyone has answered."}
+                              </p>
+
+                              <div className="mt-3 flex flex-wrap gap-2">
+                                <button
+                                  type="button"
+                                  disabled={isSaving}
+                                  onClick={() =>
+                                    handlePresentationAvailability(
+                                      item,
+                                      option,
+                                      false,
+                                      null
+                                    )
+                                  }
+                                  className={`rounded-lg border px-3 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50 ${
+                                    selected === "unavailable"
+                                      ? "border-red-300 bg-red-400/15 text-red-200"
+                                      : "border-line text-mist hover:border-red-400/40 hover:text-red-200"
+                                  }`}
+                                >
+                                  Can&apos;t attend
+                                </button>
+
+                                {(item.mode === "in_person" ||
+                                  item.mode === "hybrid") && (
+                                  <button
+                                    type="button"
+                                    disabled={isSaving}
+                                    onClick={() =>
+                                      handlePresentationAvailability(
+                                        item,
+                                        option,
+                                        true,
+                                        "in_person"
+                                      )
+                                    }
+                                    className={`rounded-lg border px-3 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50 ${
+                                      selected === "in_person"
+                                        ? "border-sage bg-sage/15 text-sage"
+                                        : "border-line text-mist hover:border-sage/40 hover:text-white"
+                                    }`}
+                                  >
+                                    In person
+                                  </button>
+                                )}
+
+                                {(item.mode === "online" ||
+                                  item.mode === "hybrid") && (
+                                  <button
+                                    type="button"
+                                    disabled={isSaving}
+                                    onClick={() =>
+                                      handlePresentationAvailability(
+                                        item,
+                                        option,
+                                        true,
+                                        "online"
+                                      )
+                                    }
+                                    className={`rounded-lg border px-3 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50 ${
+                                      selected === "online"
+                                        ? "border-sage bg-sage/15 text-sage"
+                                        : "border-line text-mist hover:border-sage/40 hover:text-white"
+                                    }`}
+                                  >
+                                    Zoom
+                                  </button>
+                                )}
+                              </div>
+
+                              {isSaving && (
+                                <p className="mt-2 text-xs text-mist/50">
+                                  Saving availability…
+                                </p>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+
                   {item.stage === "held" && isAdvisor && (
-                    <button
-                      type="button"
-                      onClick={() => openReview(item)}
-                      className="mt-3 rounded-lg bg-sage px-4 py-2 text-sm font-semibold text-ink hover:bg-sage-light"
-                    >
-                      Record final decision
-                    </button>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={() => openReview(item)}
+                        className="rounded-lg bg-sage px-4 py-2 text-sm font-semibold text-ink hover:bg-sage-light"
+                      >
+                        Record final decision
+                      </button>
+
+                      <button
+                        type="button"
+                        disabled={resettingPresentation}
+                        onClick={() => setPresentationToReset(item)}
+                        className="rounded-lg border border-red-400/30 px-4 py-2 text-sm font-semibold text-red-300 hover:bg-red-400/10 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        Didn&apos;t take place
+                      </button>
+                    </div>
                   )}
                 </div>
               );
@@ -986,7 +1199,9 @@ export default function FacultyDashboard() {
           </div>
         ) : (
           <p className="rounded-xl border border-dashed border-line px-5 py-4 text-sm text-mist/50">
-            No presentations in progress. Your students&apos; and committee students&apos; exam, proposal and defense presentations appear here once the advisor approves the document.
+            No presentations in progress. Your students&apos; and committee
+            students&apos; exam, proposal and defense presentations appear
+            here once the advisor approves the document.
           </p>
         )}
       </section>
@@ -1416,6 +1631,22 @@ export default function FacultyDashboard() {
           }
           onCancel={() =>
             setMembershipToLeave(
+              null
+            )
+          }
+        />
+      )}
+
+      {presentationToReset && (
+        <ConfirmDialog
+          title="Presentation didn't take place?"
+          message={`This will ask ${presentationToReset.student_name} to propose new presentation dates.`}
+          confirmLabel="Yes, request new dates"
+          onConfirm={
+            handlePresentationNotHeld
+          }
+          onCancel={() =>
+            setPresentationToReset(
               null
             )
           }
