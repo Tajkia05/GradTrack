@@ -29,8 +29,18 @@ from app.modules.notifications.models import Notification
 from app.modules.presentations.models import (ACTIVE, AWAITING, CANCELLED, HELD, NEEDS_NEW_DATES, SCHEDULED, Presentation,
                                               PresentationAvailability, PresentationOption)
 # The data formats this module returns and accepts.
-from app.modules.presentations.schemas import (AdvisorPresentationOut, ExternalMemberOut, OptionOut, PresentationIn, PresentationOut, PresentationState,
-                                               PresentationSummary, ResponseOut)
+from app.modules.presentations.schemas import (
+    AdvisorPresentationOut,
+    ExternalMemberOut,
+    FacultyAvailabilityOut,
+    FacultyOptionOut,
+    OptionOut,
+    PresentationIn,
+    PresentationOut,
+    PresentationState,
+    PresentationSummary,
+    ResponseOut,
+)
 # Records an approved document in the history and tells the student.
 from app.modules.submissions.history import record_document_approval
 # The submissions and the status history.
@@ -662,45 +672,311 @@ def waiting_for_presentation(db: Session, student: User, milestone: Milestone, s
     return _shown_status(presentation, chosen, now) != HELD
 
 
-# One student's presentation for the advisor's dashboard, or None if there's nothing to show.
+# True if this faculty member may answer availability for this student.
+def faculty_can_answer(db: Session, faculty: User, student: User) -> bool:
+    # The advisor is always allowed.
+    if student.advisor_id == faculty.id:
+        return True
+
+    # Otherwise, the faculty member must be an approved committee member.
+    member = db.scalar(
+        select(CommitteeMember).where(
+            CommitteeMember.student_id == student.id,
+            CommitteeMember.faculty_id == faculty.id,
+            CommitteeMember.status == "approved",
+        )
+    )
+    return member is not None
+
+
+# Saves or changes one faculty member's availability for one proposed date.
+def set_faculty_availability(
+    db: Session,
+    faculty: User,
+    student_id: int,
+    milestone_id: int,
+    option_id: int,
+    available: bool,
+    attend_mode: str | None,
+) -> PresentationAvailability:
+    # Find the student.
+    student = db.get(User, student_id)
+    if student is None:
+        raise HTTPException(404, "Student not found.")
+
+    # Only the advisor or an approved committee faculty member may answer.
+    if not faculty_can_answer(db, faculty, student):
+        raise HTTPException(
+            403,
+            "You are not the advisor or an approved committee member for this student.",
+        )
+
+    # Make sure this milestone uses presentation scheduling.
+    milestone = get_presented_milestone(db, milestone_id)
+
+    # Find the current presentation for this attempt.
+    presentation = current_presentation(db, student.id, milestone.id)
+
+    # Availability can only be changed while dates are waiting for responses.
+    if presentation is None or presentation.status != AWAITING:
+        raise HTTPException(
+            409,
+            "This presentation is no longer accepting availability.",
+        )
+
+    # The option must belong to this presentation.
+    option = db.scalar(
+        select(PresentationOption).where(
+            PresentationOption.id == option_id,
+            PresentationOption.presentation_id == presentation.id,
+        )
+    )
+    if option is None:
+        raise HTTPException(
+            404,
+            "That date does not belong to this presentation.",
+        )
+
+    # Someone who cannot attend has no attendance mode.
+    if not available:
+        attend_mode = None
+    else:
+        # An available faculty member must say how they will attend.
+        if attend_mode is None:
+            raise HTTPException(422, "Choose how you will attend.")
+
+        # Validate the answer against the presentation's allowed mode.
+        allowed_modes = {
+            "in_person": {"in_person"},
+            "online": {"online"},
+            "hybrid": {"in_person", "online"},
+        }[presentation.mode]
+
+        if attend_mode not in allowed_modes:
+            if presentation.mode == "in_person":
+                detail = "This presentation only allows in-person attendance."
+            elif presentation.mode == "online":
+                detail = "This presentation only allows Zoom attendance."
+            else:
+                detail = "Choose in-person or Zoom attendance."
+            raise HTTPException(422, detail)
+
+    # Update an existing answer instead of creating a duplicate row.
+    answer = db.scalar(
+        select(PresentationAvailability).where(
+            PresentationAvailability.option_id == option.id,
+            PresentationAvailability.faculty_id == faculty.id,
+        )
+    )
+
+    if answer is None:
+        answer = PresentationAvailability(
+            option_id=option.id,
+            faculty_id=faculty.id,
+            available=available,
+            attend_mode=attend_mode,
+        )
+        db.add(answer)
+    else:
+        answer.available = available
+        answer.attend_mode = attend_mode
+
+    # Notify the student that this faculty member answered.
+    db.add(
+        Notification(
+            user_id=student.id,
+            message=(
+                f"{faculty.full_name} updated availability for your "
+                f"{milestone.name} presentation."
+            ),
+            link=links.student_milestone(milestone.id),
+        )
+    )
+
+    db.commit()
+    db.refresh(answer)
+    return answer
+
+
+# The advisor says a presentation whose scheduled date passed did not actually happen.
+def mark_presentation_not_held(
+    db: Session,
+    faculty: User,
+    student_id: int,
+    milestone_id: int,
+    now: datetime | None = None,
+) -> Presentation:
+    # Use the current time unless a test supplies one.
+    now = now or datetime.now(timezone.utc)
+
+    # Find the student.
+    student = db.get(User, student_id)
+    if student is None:
+        raise HTTPException(404, "Student not found.")
+
+    # Only the student's advisor may reset the presentation.
+    if student.advisor_id != faculty.id:
+        raise HTTPException(
+            403,
+            "Only this student's advisor can mark the presentation as not having taken place.",
+        )
+
+    # Make sure this milestone uses presentation scheduling.
+    milestone = get_presented_milestone(db, milestone_id)
+
+    # Find the current presentation.
+    presentation = current_presentation(db, student.id, milestone.id)
+    if presentation is None:
+        raise HTTPException(404, "Presentation not found.")
+
+    # It must have a valid selected date that has already passed.
+    options = _options(db, presentation)
+    chosen = _chosen(presentation, options)
+
+    if _shown_status(presentation, chosen, now) != HELD:
+        raise HTTPException(
+            409,
+            "The presentation cannot be marked as not having taken place yet.",
+        )
+
+    # Let the student propose a fresh set of dates.
+    presentation.status = NEEDS_NEW_DATES
+    presentation.chosen_option_id = None
+
+    # Notify the student.
+    db.add(
+        Notification(
+            user_id=student.id,
+            message=(
+                f"Your advisor marked the {milestone.name} presentation as not "
+                "having taken place. Please propose new dates."
+            ),
+            link=links.student_milestone(milestone.id),
+        )
+    )
+
+    db.commit()
+    db.refresh(presentation)
+    return presentation
+
+
+# One student's presentation for the faculty dashboard, or None if there's nothing to show.
 # A document still waiting for its review isn't included, because it's on the review list.
-def advisor_presentation(db: Session, student: User, milestone: Milestone, status: MilestoneStatus, now: datetime | None = None) -> AdvisorPresentationOut | None:
+def advisor_presentation(
+    db: Session,
+    student: User,
+    milestone: Milestone,
+    status: MilestoneStatus,
+    now: datetime | None = None,
+    faculty_id: int | None = None,
+) -> AdvisorPresentationOut | None:
     # Use the current time unless a test gives one.
     now = now or datetime.now(timezone.utc)
+
     # Only these milestones have a presentation, and only before the final decision.
-    if milestone.name not in PRESENTED_MILESTONES or status not in (MilestoneStatus.SUBMITTED, DOCUMENT_STAGE, MilestoneStatus.REVISION_REQUESTED):
-        # Nothing to show.
+    if milestone.name not in PRESENTED_MILESTONES or status not in (
+        MilestoneStatus.SUBMITTED,
+        DOCUMENT_STAGE,
+        MilestoneStatus.REVISION_REQUESTED,
+    ):
         return None
+
     # Find the presentation for this attempt.
     presentation = current_presentation(db, student.id, milestone.id)
+
     # Its dates.
     options = _options(db, presentation) if presentation is not None else []
+
     # Its chosen date, if any.
     chosen = _chosen(presentation, options) if presentation is not None else None
+
     # Its status to show, or None without one. A cancelled one counts as none.
-    shown = _shown_status(presentation, chosen, now) if presentation is not None and presentation.status != CANCELLED else None
+    shown = (
+        _shown_status(presentation, chosen, now)
+        if presentation is not None and presentation.status != CANCELLED
+        else None
+    )
+
     # After the presentation, a revision request waits for the student's revised document.
     if shown == HELD and status == MilestoneStatus.REVISION_REQUESTED:
-        # Waiting for the revision.
         stage = "revision_requested"
     # The presentation has taken place.
     elif shown == HELD:
-        # Done.
         stage = HELD
     # The document is approved, and the presentation is still being arranged.
     elif document_approved(db, student.id, milestone.id, status):
-        # Use the presentation's status, or wait for dates without one.
         stage = shown or "waiting_for_dates"
     # Anything else is a document review, which is on the review list.
     else:
-        # Nothing to show here.
         return None
-    # Build the entry. The details only exist once dates were proposed.
-    return AdvisorPresentationOut(student_id=student.id, student_name=student.full_name, milestone_id=milestone.id, milestone_name=milestone.name,
-                                  # The stage and chosen date.
-                                  stage=stage, scheduled_at=chosen.starts_at if chosen else None,
-                                  # How and where, and how many dates.
-                                  mode=presentation.mode if shown else None, location=presentation.location if shown else None,
-                                  # The Zoom link for a hybrid presentation.
-                                  meeting_link=presentation.meeting_link if shown else None,
-                                  option_count=len(options) if shown else 0)
+
+    # Build the proposed dates for the logged-in faculty member.
+    faculty_options: list[FacultyOptionOut] = []
+
+    if (
+        faculty_id is not None
+        and presentation is not None
+        and shown == AWAITING
+        and options
+    ):
+        # Reuse the student-side result so waiting_for is calculated in one place.
+        presentation_out = _presentation_out(
+            db,
+            student,
+            presentation,
+            now,
+        )
+
+        # Load this faculty member's answers for all dates in one query.
+        answers = {
+            answer.option_id: answer
+            for answer in db.scalars(
+                select(PresentationAvailability).where(
+                    PresentationAvailability.option_id.in_(
+                        [option.id for option in options]
+                    ),
+                    PresentationAvailability.faculty_id == faculty_id,
+                )
+            )
+        }
+
+        for option in presentation_out.options:
+            answer = answers.get(option.id)
+
+            # Older single-mode answers may not have stored attend_mode.
+            saved_mode = None
+            if answer is not None and answer.available:
+                saved_mode = answer.attend_mode
+                if saved_mode is None and presentation.mode != "hybrid":
+                    saved_mode = presentation.mode
+
+            faculty_options.append(
+                FacultyOptionOut(
+                    id=option.id,
+                    starts_at=option.starts_at,
+                    my_response=(
+                        FacultyAvailabilityOut(
+                            available=answer.available,
+                            attend_mode=saved_mode,
+                        )
+                        if answer is not None
+                        else None
+                    ),
+                    waiting_for=option.waiting_for,
+                )
+            )
+
+    # Build the dashboard entry.
+    return AdvisorPresentationOut(
+        student_id=student.id,
+        student_name=student.full_name,
+        milestone_id=milestone.id,
+        milestone_name=milestone.name,
+        stage=stage,
+        scheduled_at=chosen.starts_at if chosen else None,
+        mode=presentation.mode if shown else None,
+        location=presentation.location if shown else None,
+        meeting_link=presentation.meeting_link if shown else None,
+        option_count=len(options) if shown else 0,
+        options=faculty_options,
+    )

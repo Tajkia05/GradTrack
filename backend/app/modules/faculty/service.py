@@ -28,8 +28,11 @@ from app.modules.milestones.models import (
 )
 from app.modules.notifications import links
 from app.modules.notifications.models import Notification
-# Before the presentation, Approve only approves the document.
-from app.modules.presentations.service import advisor_presentation, approve_document_if_needed, waiting_for_presentation
+from app.modules.presentations.service import (
+    advisor_presentation,
+    approve_document_if_needed,
+    waiting_for_presentation,
+)
 from app.modules.student.service import semester_index
 from app.modules.submissions.history import record_status_change
 from app.modules.users.models import Role, Term, User
@@ -82,6 +85,7 @@ def get_faculty_dashboard(
         ZoneInfo("America/New_York")
     ).date()
 
+    # Students directly advised by this faculty member.
     students = list(
         db.scalars(
             select(User)
@@ -93,6 +97,7 @@ def get_faculty_dashboard(
         )
     )
 
+    # All milestones, in program order.
     milestones = list(
         db.scalars(
             select(Milestone).order_by(
@@ -109,8 +114,13 @@ def get_faculty_dashboard(
 
     student_outputs = []
     pending_reviews = []
-    # The advisees' presentations, for the Presentations section.
+
+    # Presentation cards shown in the faculty dashboard.
     presentations = []
+
+    # ========================================================
+    # ADVISEES
+    # ========================================================
 
     for student in students:
         progress_rows = list(
@@ -148,6 +158,7 @@ def get_faculty_dashboard(
             )
         )
 
+        # Check milestones that may need review or presentation handling.
         for row in progress_rows:
             if row.status not in REVIEW_STATUSES:
                 continue
@@ -159,18 +170,33 @@ def get_faculty_dashboard(
             if milestone is None:
                 continue
 
-            # Add the presentation, if this milestone has one in progress.
+            # Add the presentation card if this milestone currently
+            # has presentation activity.
+            #
+            # faculty_id is passed so advisor_presentation() can return
+            # this logged-in faculty member's own availability response
+            # for every proposed date.
             presentation = advisor_presentation(
-                db, student, milestone, row.status
+                db,
+                student,
+                milestone,
+                row.status,
+                faculty_id=faculty.id,
             )
 
             if presentation is not None:
                 presentations.append(presentation)
 
             # An approved document waiting for its presentation has
-            # nothing to decide yet. It comes back once the date passes.
+            # nothing for the advisor to decide yet.
+            #
+            # It returns to the review list after the presentation date
+            # passes so the advisor can record the final decision.
             if waiting_for_presentation(
-                db, student, milestone, row.status
+                db,
+                student,
+                milestone,
+                row.status,
             ):
                 continue
 
@@ -184,10 +210,19 @@ def get_faculty_dashboard(
                 )
             )
 
-    # The students whose committees this faculty member is on, other than their own advisees.
+    # ========================================================
+    # COMMITTEE MEMBERSHIPS
+    # ========================================================
+
+    # Find students whose approved committees this faculty member
+    # belongs to, excluding their own advisees because those were
+    # already handled above.
     member_of = db.scalars(
         select(User)
-        .join(CommitteeMember, CommitteeMember.student_id == User.id)
+        .join(
+            CommitteeMember,
+            CommitteeMember.student_id == User.id,
+        )
         .where(
             CommitteeMember.faculty_id == faculty.id,
             CommitteeMember.status == "approved",
@@ -197,25 +232,39 @@ def get_faculty_dashboard(
         .order_by(User.full_name)
     )
 
-    # Add those students' presentations too, marked as a committee member's view.
+    # Add those students' presentation cards too.
     for student in member_of:
         for row in db.scalars(
             select(StudentMilestone).where(
                 StudentMilestone.student_id == student.id
             )
         ):
-            milestone = milestone_by_id.get(row.milestone_id)
+            milestone = milestone_by_id.get(
+                row.milestone_id
+            )
 
             if milestone is None:
                 continue
 
+            # Pass the logged-in committee member's faculty ID so
+            # their own saved availability can be returned.
             presentation = advisor_presentation(
-                db, student, milestone, row.status
+                db,
+                student,
+                milestone,
+                row.status,
+                faculty_id=faculty.id,
             )
 
             if presentation is not None:
+                # Committee members can mark availability but cannot
+                # record the student's final milestone decision.
                 presentation.role = "member"
                 presentations.append(presentation)
+
+    # ========================================================
+    # DASHBOARD RESULT
+    # ========================================================
 
     return FacultyDashboardOut(
         faculty=FacultyProfile(
@@ -265,10 +314,20 @@ def review_student_milestone(
     ):
         return None
 
-    # For the exam, proposal and defense, Approve before the presentation
-    # only approves the document, and the milestone isn't complete yet.
-    if new_status == MilestoneStatus.APPROVED and approve_document_if_needed(
-        db, faculty, student, progress, comment
+    # For the exam, proposal, and defense, Approve before the
+    # presentation only approves the document.
+    #
+    # The milestone is not completed until the presentation has
+    # taken place and the advisor records the final decision.
+    if (
+        new_status == MilestoneStatus.APPROVED
+        and approve_document_if_needed(
+            db,
+            faculty,
+            student,
+            progress,
+            comment,
+        )
     ):
         db.refresh(progress)
         return progress
@@ -305,7 +364,10 @@ def get_pending_committee_invitations(
 ) -> list[CommitteeInvitationOut]:
     """Return pending committee invitations for this faculty member."""
     rows = db.execute(
-        select(CommitteeMember, User)
+        select(
+            CommitteeMember,
+            User,
+        )
         .join(
             User,
             User.id == CommitteeMember.student_id,
@@ -314,7 +376,9 @@ def get_pending_committee_invitations(
             CommitteeMember.faculty_id == faculty.id,
             CommitteeMember.status == "pending",
         )
-        .order_by(CommitteeMember.id)
+        .order_by(
+            CommitteeMember.id
+        )
     ).all()
 
     return [
@@ -379,7 +443,10 @@ def get_committee_memberships(
 ) -> list[CommitteeMembershipOut]:
     """Return committees the faculty member has joined."""
     rows = db.execute(
-        select(CommitteeMember, User)
+        select(
+            CommitteeMember,
+            User,
+        )
         .join(
             User,
             User.id == CommitteeMember.student_id,
@@ -388,7 +455,9 @@ def get_committee_memberships(
             CommitteeMember.faculty_id == faculty.id,
             CommitteeMember.status == "approved",
         )
-        .order_by(CommitteeMember.id)
+        .order_by(
+            CommitteeMember.id
+        )
     ).all()
 
     return [
@@ -451,15 +520,31 @@ def get_faculty_profile(
     return FacultyProfileOut(
         full_name=faculty.full_name,
         email=faculty.email,
-        title=profile.title if profile else None,
-        department=profile.department if profile else None,
-        affiliation=profile.affiliation if profile else None,
+        title=(
+            profile.title
+            if profile
+            else None
+        ),
+        department=(
+            profile.department
+            if profile
+            else None
+        ),
+        affiliation=(
+            profile.affiliation
+            if profile
+            else None
+        ),
         research_interests=(
             profile.research_interests
             if profile
             else None
         ),
-        lab_name=profile.lab_name if profile else None,
+        lab_name=(
+            profile.lab_name
+            if profile
+            else None
+        ),
         accepting_students=(
             profile.accepting_students
             if profile
@@ -470,7 +555,11 @@ def get_faculty_profile(
             if profile
             else None
         ),
-        bio=profile.bio if profile else None,
+        bio=(
+            profile.bio
+            if profile
+            else None
+        ),
     )
 
 
@@ -564,6 +653,7 @@ def get_student_progress_for_faculty(
     )
 
     total = len(milestones)
+
     remaining = max(
         0,
         total - completed,
@@ -614,4 +704,3 @@ def get_student_progress_for_faculty(
         progress_percent=progress_percent,
         milestones=milestone_outputs,
     )
-    

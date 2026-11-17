@@ -610,3 +610,505 @@ class PresentationTests(unittest.TestCase):
         self.answer(0, True, attend_mode="online")
         # The date is highlighted, and the answer shows Zoom.
         self.assertEqual((self.shown_options()[0]["everyone_available"], self.shown_options()[0]["responses"][0]["attend_mode"]), (True, "online"))
+
+    # Calls the faculty availability endpoint for one of the newest presentation's dates.
+    def faculty_answer(self, position, available, faculty=None, attend_mode=None, milestone_id=EXAM):
+        # The logged-in faculty member. The advisor is the default.
+        faculty = faculty or self.faculty
+        # Find the newest presentation's dates, earliest first.
+        presentation = self.latest()
+        options = list(
+            self.db.scalars(
+                select(PresentationOption)
+                .where(PresentationOption.presentation_id == presentation.id)
+                .order_by(PresentationOption.starts_at, PresentationOption.id)
+            )
+        )
+        # Send the availability response through the real faculty API.
+        return self.client.put(
+            f"/api/faculty/students/{self.lisa.id}/milestones/{milestone_id}"
+            f"/presentation/options/{options[position].id}/availability",
+            headers=self.headers(faculty),
+            json=dict(
+                available=available,
+                attend_mode=attend_mode,
+            ),
+        )
+
+    # Returns Lisa's exam presentation card from a faculty dashboard.
+    def faculty_presentation_card(self, faculty=None):
+        # The advisor is the default viewer.
+        faculty = faculty or self.faculty
+        # Read that faculty member's dashboard.
+        dashboard = self.client.get(
+            "/api/faculty/me/dashboard",
+            headers=self.headers(faculty),
+        ).json()
+        # Return Lisa's comprehensive exam card.
+        return next(
+            (
+                item
+                for item in dashboard["presentations"]
+                if (item["student_id"], item["milestone_id"])
+                == (self.lisa.id, EXAM)
+            ),
+            None,
+        )
+
+    # The advisor can save availability through the faculty endpoint.
+    def test_advisor_can_mark_presentation_availability(self):
+        # Lisa's document is approved and she proposes one date.
+        self.ready()
+        self.propose()
+        # Her advisor can attend in person.
+        response = self.faculty_answer(
+            0,
+            True,
+            attend_mode="in_person",
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.json()["attend_mode"],
+            "in_person",
+        )
+        # The database has one faculty answer.
+        answers = list(
+            self.db.scalars(
+                select(PresentationAvailability).where(
+                    PresentationAvailability.faculty_id
+                    == self.faculty.id
+                )
+            )
+        )
+        self.assertEqual(len(answers), 1)
+        self.assertTrue(answers[0].available)
+        self.assertEqual(answers[0].attend_mode, "in_person")
+
+    # Changing an answer updates the same row instead of adding a duplicate.
+    def test_faculty_availability_updates_existing_row(self):
+        # Lisa proposes one date.
+        self.ready()
+        self.propose()
+        # The advisor first says they can attend.
+        self.assertEqual(
+            self.faculty_answer(
+                0,
+                True,
+                attend_mode="in_person",
+            ).status_code,
+            200,
+        )
+        # Then they change the answer to can't attend.
+        self.assertEqual(
+            self.faculty_answer(
+                0,
+                False,
+                attend_mode=None,
+            ).status_code,
+            200,
+        )
+        # There is still only one row for this faculty member and date.
+        option = self.db.scalar(
+            select(PresentationOption).where(
+                PresentationOption.presentation_id
+                == self.latest().id
+            )
+        )
+        answers = list(
+            self.db.scalars(
+                select(PresentationAvailability).where(
+                    PresentationAvailability.option_id == option.id,
+                    PresentationAvailability.faculty_id
+                    == self.faculty.id,
+                )
+            )
+        )
+        self.assertEqual(len(answers), 1)
+        self.assertFalse(answers[0].available)
+        self.assertIsNone(answers[0].attend_mode)
+
+    # An approved faculty committee member can mark availability too.
+    def test_approved_committee_member_can_mark_availability(self):
+        # Add an approved faculty committee member.
+        member = User(
+            id=9,
+            email="member@test.edu",
+            full_name="Member",
+            role=Role.FACULTY,
+            password_hash="unused",
+        )
+        self.db.add_all(
+            [
+                member,
+                CommitteeMember(
+                    student_id=self.lisa.id,
+                    faculty_id=member.id,
+                    status="approved",
+                    invited_on=date(2026, 1, 1),
+                ),
+            ]
+        )
+        self.db.commit()
+        # Lisa proposes a date.
+        self.ready()
+        self.propose()
+        # The member can answer.
+        response = self.faculty_answer(
+            0,
+            True,
+            faculty=member,
+            attend_mode="in_person",
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["faculty_id"], member.id)
+
+    # A faculty member outside the committee cannot mark availability.
+    def test_unrelated_faculty_cannot_mark_availability(self):
+        # Create an unrelated faculty member.
+        outsider = User(
+            id=9,
+            email="outsider@test.edu",
+            full_name="Outsider",
+            role=Role.FACULTY,
+            password_hash="unused",
+        )
+        self.db.add(outsider)
+        self.db.commit()
+        # Lisa proposes a date.
+        self.ready()
+        self.propose()
+        # The unrelated faculty member is refused.
+        response = self.faculty_answer(
+            0,
+            True,
+            faculty=outsider,
+            attend_mode="in_person",
+        )
+        self.assertEqual(response.status_code, 403)
+
+    # A pending committee invitation does not authorize availability.
+    def test_pending_committee_member_cannot_mark_availability(self):
+        # Create a faculty member with only a pending invitation.
+        member = User(
+            id=9,
+            email="pending@test.edu",
+            full_name="Pending Member",
+            role=Role.FACULTY,
+            password_hash="unused",
+        )
+        self.db.add_all(
+            [
+                member,
+                CommitteeMember(
+                    student_id=self.lisa.id,
+                    faculty_id=member.id,
+                    status="pending",
+                    invited_on=date(2026, 1, 1),
+                ),
+            ]
+        )
+        self.db.commit()
+        # Lisa proposes a date.
+        self.ready()
+        self.propose()
+        # Pending is not enough.
+        response = self.faculty_answer(
+            0,
+            True,
+            faculty=member,
+            attend_mode="in_person",
+        )
+        self.assertEqual(response.status_code, 403)
+
+    # An option from another presentation cannot be answered for Lisa's presentation.
+    def test_availability_option_must_belong_to_presentation(self):
+        # Lisa proposes her date.
+        self.ready()
+        self.propose()
+        # Create another presentation and option manually.
+        other = Presentation(
+            student_id=self.raj.id,
+            milestone_id=DEFENSE,
+            attempt=1,
+            status="awaiting_availability",
+            mode="in_person",
+            location="Other room",
+        )
+        self.db.add(other)
+        self.db.flush()
+        wrong_option = PresentationOption(
+            presentation_id=other.id,
+            starts_at=days_from_now(40),
+        )
+        self.db.add(wrong_option)
+        self.db.commit()
+        # Lisa's advisor cannot answer that other option through Lisa's URL.
+        response = self.client.put(
+            f"/api/faculty/students/{self.lisa.id}/milestones/{EXAM}"
+            f"/presentation/options/{wrong_option.id}/availability",
+            headers=self.headers(self.faculty),
+            json=dict(
+                available=True,
+                attend_mode="in_person",
+            ),
+        )
+        self.assertEqual(response.status_code, 404)
+
+    # Availability closes once a date has been scheduled.
+    def test_availability_closes_after_date_is_scheduled(self):
+        # Lisa proposes and the date becomes scheduled.
+        self.ready()
+        self.propose()
+        self.confirm(days=1)
+        # Availability can no longer be changed.
+        response = self.faculty_answer(
+            0,
+            True,
+            attend_mode="in_person",
+        )
+        self.assertEqual(response.status_code, 409)
+
+    # In-person presentations reject Zoom-only faculty answers.
+    def test_in_person_presentation_rejects_zoom_availability(self):
+        # The default proposal is in person.
+        self.ready()
+        self.propose()
+        # Zoom is not an allowed attendance mode.
+        response = self.faculty_answer(
+            0,
+            True,
+            attend_mode="online",
+        )
+        self.assertEqual(response.status_code, 422)
+
+    # Online presentations reject in-person faculty answers.
+    def test_online_presentation_rejects_in_person_availability(self):
+        # Propose an online presentation.
+        self.ready()
+        self.propose(
+            proposal(
+                3,
+                mode="online",
+                location="https://zoom.us/j/1",
+            )
+        )
+        # In-person is not an allowed attendance mode.
+        response = self.faculty_answer(
+            0,
+            True,
+            attend_mode="in_person",
+        )
+        self.assertEqual(response.status_code, 422)
+        # Zoom is accepted.
+        response = self.faculty_answer(
+            0,
+            True,
+            attend_mode="online",
+        )
+        self.assertEqual(response.status_code, 200)
+
+    # Hybrid presentations accept either in-person or Zoom attendance.
+    def test_hybrid_presentation_accepts_both_faculty_modes(self):
+        # Propose two hybrid dates.
+        self.ready()
+        body = dict(
+            proposal(
+                3,
+                5,
+                mode="hybrid",
+            ),
+            meeting_link="https://zoom.us/j/1",
+        )
+        self.propose(body)
+        # In person works for the first date.
+        self.assertEqual(
+            self.faculty_answer(
+                0,
+                True,
+                attend_mode="in_person",
+            ).status_code,
+            200,
+        )
+        # Zoom works for the second date.
+        self.assertEqual(
+            self.faculty_answer(
+                1,
+                True,
+                attend_mode="online",
+            ).status_code,
+            200,
+        )
+
+    # Can't attend always saves a null attendance mode.
+    def test_unavailable_faculty_answer_clears_attend_mode(self):
+        # Lisa proposes a date.
+        self.ready()
+        self.propose()
+        # Even if a client sends a mode, unavailable is normalized to null.
+        response = self.faculty_answer(
+            0,
+            False,
+            attend_mode="in_person",
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(response.json()["available"])
+        self.assertIsNone(response.json()["attend_mode"])
+
+    # Saving availability notifies the student with the milestone link.
+    def test_faculty_availability_notifies_student(self):
+        # Lisa proposes a date.
+        self.ready()
+        self.propose()
+        # The advisor answers.
+        self.faculty_answer(
+            0,
+            True,
+            attend_mode="in_person",
+        )
+        # The newest student notification describes the availability update.
+        notifications = self.client.get(
+            "/api/notifications/me",
+            headers=self.headers(self.lisa),
+        ).json()
+        self.assertIn(
+            "updated availability",
+            notifications[0]["message"],
+        )
+        self.assertIn(
+            str(EXAM),
+            notifications[0]["link"],
+        )
+
+    # The dashboard returns the logged-in faculty member's answer and waiting list.
+    def test_dashboard_returns_my_response_and_waiting_for(self):
+        # Add a committee faculty member so someone remains unanswered.
+        member = User(
+            id=9,
+            email="member@test.edu",
+            full_name="Member",
+            role=Role.FACULTY,
+            password_hash="unused",
+        )
+        self.db.add_all(
+            [
+                member,
+                CommitteeMember(
+                    student_id=self.lisa.id,
+                    faculty_id=member.id,
+                    status="approved",
+                    invited_on=date(2026, 1, 1),
+                ),
+            ]
+        )
+        self.db.commit()
+        # Lisa proposes one date.
+        self.ready()
+        self.propose()
+        # Only the advisor answers.
+        self.faculty_answer(
+            0,
+            True,
+            attend_mode="in_person",
+        )
+        # The advisor's dashboard shows their own response.
+        card = self.faculty_presentation_card()
+        self.assertEqual(card["stage"], "awaiting_availability")
+        self.assertEqual(
+            card["options"][0]["my_response"],
+            dict(
+                available=True,
+                attend_mode="in_person",
+            ),
+        )
+        # The committee member is still waiting.
+        self.assertIn(
+            "Member",
+            card["options"][0]["waiting_for"],
+        )
+        # The committee member sees no personal response yet.
+        member_card = self.faculty_presentation_card(member)
+        self.assertIsNone(
+            member_card["options"][0]["my_response"]
+        )
+
+    # The advisor can say a past scheduled presentation did not actually happen.
+    def test_advisor_can_mark_presentation_not_held(self):
+        # Lisa's presentation was scheduled for yesterday.
+        self.ready()
+        self.propose()
+        self.confirm(days=-1)
+        # The advisor marks it as not having taken place.
+        response = self.client.patch(
+            f"/api/faculty/students/{self.lisa.id}/milestones/{EXAM}"
+            "/presentation/did-not-take-place",
+            headers=self.headers(self.faculty),
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.json()["status"],
+            NEEDS_NEW_DATES,
+        )
+        # The chosen option is cleared.
+        presentation = self.latest()
+        self.assertEqual(
+            presentation.status,
+            NEEDS_NEW_DATES,
+        )
+        self.assertIsNone(presentation.chosen_option_id)
+        # The student can propose new dates again.
+        state = self.page().json()["presentation"]
+        self.assertTrue(state["can_propose"])
+        self.assertIn("Propose new dates", state["message"])
+        # The student was notified.
+        self.assertIn(
+            "not having taken place",
+            self.messages(self.lisa.id)[-1],
+        )
+
+    # A committee member cannot use the advisor-only reset action.
+    def test_committee_member_cannot_mark_presentation_not_held(self):
+        # Add an approved committee faculty member.
+        member = User(
+            id=9,
+            email="member@test.edu",
+            full_name="Member",
+            role=Role.FACULTY,
+            password_hash="unused",
+        )
+        self.db.add_all(
+            [
+                member,
+                CommitteeMember(
+                    student_id=self.lisa.id,
+                    faculty_id=member.id,
+                    status="approved",
+                    invited_on=date(2026, 1, 1),
+                ),
+            ]
+        )
+        self.db.commit()
+        # The presentation date has passed.
+        self.ready()
+        self.propose()
+        self.confirm(days=-1)
+        # Committee members are refused.
+        response = self.client.patch(
+            f"/api/faculty/students/{self.lisa.id}/milestones/{EXAM}"
+            "/presentation/did-not-take-place",
+            headers=self.headers(member),
+        )
+        self.assertEqual(response.status_code, 403)
+
+    # The advisor cannot reset a presentation before its scheduled date.
+    def test_presentation_cannot_be_marked_not_held_early(self):
+        # Lisa's presentation is tomorrow.
+        self.ready()
+        self.propose()
+        self.confirm(days=1)
+        # The action is too early.
+        response = self.client.patch(
+            f"/api/faculty/students/{self.lisa.id}/milestones/{EXAM}"
+            "/presentation/did-not-take-place",
+            headers=self.headers(self.faculty),
+        )
+        self.assertEqual(response.status_code, 409)
