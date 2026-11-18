@@ -19,6 +19,17 @@ const MODE_LABELS = { in_person: "In person", online: "Online (Zoom)", hybrid: "
 // How a committee member joins, shown next to their answer.
 const JOIN_LABELS = { in_person: "in person", online: "Zoom" };
 
+// The times a student can pick: every half hour from 8:00 AM to 6:00 PM, as "HH:mm" text.
+const TIME_CHOICES = Array.from({ length: 21 }, (_, step) => `${String(8 + Math.floor(step / 2)).padStart(2, "0")}:${step % 2 ? "30" : "00"}`);
+
+// Shows "HH:mm" text as a readable time, e.g. "2:30 PM".
+function timeLabel(time) {
+  // Split the hours and minutes.
+  const [hours, minutes] = time.split(":").map(Number);
+  // Use the 12-hour clock with AM or PM.
+  return `${hours % 12 || 12}:${String(minutes).padStart(2, "0")} ${hours < 12 ? "AM" : "PM"}`;
+}
+
 // Shows a date and time in a readable way, e.g. "Thu, Nov 20, 2026, 2:00 PM".
 export function formatWhen(value) {
   // Use the viewer's own time zone.
@@ -113,8 +124,8 @@ function ProposeForm({ data, onUpdate }) {
   const [location, setLocation] = useState("");
   // The Zoom link for a hybrid presentation.
   const [meetingLink, setMeetingLink] = useState("");
-  // The chosen dates, as date picker text. Starts with one empty date.
-  const [dates, setDates] = useState([""]);
+  // The chosen dates, each a day ("YYYY-MM-DD") and a time ("HH:mm"). Starts with one empty date.
+  const [dates, setDates] = useState([{ day: "", time: "" }]);
   // For each date's position, the external members who can attend and how: { memberId: "in_person" or "online" }.
   const [externals, setExternals] = useState({});
   // An error message to show. Empty when there's no error.
@@ -123,14 +134,37 @@ function ProposeForm({ data, onUpdate }) {
   const [saving, setSaving] = useState(false);
   // Shows a short success message.
   const showToast = useToast();
-  // The earliest date the picker allows.
-  const earliest = state.earliest_at ? toPickerValue(state.earliest_at) : undefined;
+  // The earliest allowed moment, split into its day and time, e.g. ["2026-11-18", "20:34"].
+  const [earliestDay, earliestTime] = state.earliest_at ? toPickerValue(state.earliest_at).split("T") : [undefined, undefined];
 
-  // Changes one date.
-  function setDate(index, value) {
-    // Replace only that date.
-    setDates((current) => current.map((date, position) => (position === index ? value : date)));
+  // Changes one date's day or time.
+  function setDate(index, field, value) {
+    // Replace only that part of that date.
+    setDates((current) => current.map((date, position) => (position === index ? { ...date, [field]: value } : date)));
   }
+
+  // Finds an earlier date with the same day and time, and returns its position, or -1 if there's none.
+  function sameAs(index) {
+    // This date.
+    const { day, time } = dates[index];
+    // Only a complete date can repeat another.
+    if (!day || !time) return -1;
+    // Look only at the dates above it.
+    return dates.findIndex((other, position) => position < index && other.day === day && other.time === time);
+  }
+
+  // True if a time can't be picked for a date: it's too early, or another date already has that day and time.
+  function timeTaken(index, time) {
+    // This date's day.
+    const { day } = dates[index];
+    // On the earliest day, times before the earliest allowed time are too early.
+    if (day && day === earliestDay && time < earliestTime) return true;
+    // Another date already uses this day and time.
+    return dates.some((other, position) => position !== index && day && other.day === day && other.time === time);
+  }
+
+  // True if any two dates have the same day and time.
+  const hasRepeat = dates.some((_, index) => sameAs(index) !== -1);
 
   // Removes one date, and its ticked members.
   function removeDate(index) {
@@ -163,6 +197,13 @@ function ProposeForm({ data, onUpdate }) {
     event.preventDefault();
     // Clear any old error.
     setError("");
+    // The same day and time can't be proposed twice.
+    if (hasRepeat) {
+      // Explain what to change.
+      setError("Each date must have a different day or time.");
+      // Don't send anything.
+      return;
+    }
     // Disable the button while this runs.
     setSaving(true);
     // Try to send the dates.
@@ -172,7 +213,7 @@ function ProposeForm({ data, onUpdate }) {
         // This date's external answers.
         const answers = Object.entries(externals[index] ?? {});
         // Build the date.
-        return { starts_at: new Date(date).toISOString(), external_member_ids: answers.map(([id]) => Number(id)),
+        return { starts_at: new Date(`${date.day}T${date.time}`).toISOString(), external_member_ids: answers.map(([id]) => Number(id)),
           // Only a hybrid separates Zoom from in person.
           external_online_ids: mode === "hybrid" ? answers.filter(([, how]) => how === "online").map(([id]) => Number(id)) : [] };
       });
@@ -240,18 +281,37 @@ function ProposeForm({ data, onUpdate }) {
         {dates.map((date, index) => (
           // The date's block.
           <div key={index} className="rounded-lg border border-line p-3">
-            {/* The date picker and remove button. */}
-            <div className="flex items-end gap-2">
-              {/* The picker with its label. */}
-              <label className="flex-1 text-mist">
-                {/* The label. */}
-                Date {index + 1}
-                {/* The picker, starting at the earliest allowed date. */}
-                <input type="datetime-local" required min={earliest} value={date} onChange={(event) => setDate(index, event.target.value)} className="mt-1 block w-full rounded-lg border border-line bg-ink px-3 py-2 text-white scheme-dark" />
-              </label>
+            {/* The heading and remove button. */}
+            <div className="flex items-center justify-between gap-2">
+              {/* The date's number. */}
+              <p className="text-mist">Date {index + 1}</p>
               {/* Remove this date, when there's more than one. */}
-              {dates.length > 1 && <button type="button" onClick={() => removeDate(index)} aria-label={`Remove date ${index + 1}`} className="rounded-lg border border-line px-3 py-2 text-mist hover:border-sage">Remove</button>}
+              {dates.length > 1 && <button type="button" onClick={() => removeDate(index)} aria-label={`Remove date ${index + 1}`} className="rounded-lg border border-line px-3 py-1 text-mist hover:border-sage">Remove</button>}
             </div>
+            {/* The day and the time side by side, stacked on small screens. */}
+            <div className="mt-2 grid gap-2 sm:grid-cols-2">
+              {/* The day picker with its label. */}
+              <label className="text-mist/70">
+                {/* The label. */}
+                Day
+                {/* The picker, starting at the earliest allowed day. */}
+                <input type="date" required min={earliestDay} value={date.day} onChange={(event) => setDate(index, "day", event.target.value)} className="mt-1 block w-full rounded-lg border border-line bg-ink px-3 py-2 text-white scheme-dark" />
+              </label>
+              {/* The time list with its label. */}
+              <label className="text-mist/70">
+                {/* The label. */}
+                Time
+                {/* The list of half-hour times. */}
+                <select required value={date.time} onChange={(event) => setDate(index, "time", event.target.value)} className="mt-1 block w-full rounded-lg border border-line bg-ink px-3 py-2 text-white">
+                  {/* Shown until a time is picked. */}
+                  <option value="" disabled>Choose a time</option>
+                  {/* One choice per half hour, greyed out when it's too early or another date already has it. */}
+                  {TIME_CHOICES.map((time) => <option key={time} value={time} disabled={timeTaken(index, time)}>{timeLabel(time)}</option>)}
+                </select>
+              </label>
+            </div>
+            {/* A warning when this date repeats an earlier one, such as after changing its day. */}
+            {sameAs(index) !== -1 && <p role="alert" className="mt-2 text-amber-200">Date {sameAs(index) + 1} already has this day and time. Choose a different time.</p>}
             {/* The external members, whose answers the student enters. */}
             {state.external_members.length > 0 && (
               // The checkboxes.
@@ -289,11 +349,11 @@ function ProposeForm({ data, onUpdate }) {
         ))}
       </div>
       {/* Add another date, up to the limit. */}
-      {dates.length < MAX_DATES && <button type="button" onClick={() => setDates((current) => [...current, ""])} className="mt-3 text-sage underline underline-offset-4 hover:text-sage-light">Add another date</button>}
+      {dates.length < MAX_DATES && <button type="button" onClick={() => setDates((current) => [...current, { day: "", time: "" }])} className="mt-3 text-sage underline underline-offset-4 hover:text-sage-light">Add another date</button>}
       {/* Any error, such as a date that's too early. */}
       {error && <p role="alert" className="mt-3 text-amber-200">{error}</p>}
       {/* Sends the dates. */}
-      <div><button type="submit" disabled={saving} className="mt-4 rounded-lg bg-sage px-4 py-2 font-semibold text-ink hover:bg-sage-light disabled:cursor-not-allowed disabled:opacity-50">{saving ? "Sending…" : "Send dates to committee"}</button></div>
+      <div><button type="submit" disabled={saving || hasRepeat} className="mt-4 rounded-lg bg-sage px-4 py-2 font-semibold text-ink hover:bg-sage-light disabled:cursor-not-allowed disabled:opacity-50">{saving ? "Sending…" : "Send dates to committee"}</button></div>
     </form>
   );
 }

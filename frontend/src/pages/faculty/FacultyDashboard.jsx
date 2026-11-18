@@ -574,7 +574,8 @@ export default function FacultyDashboard() {
           : "Availability saved: can't attend."
       );
 
-      setAttempt((value) => value + 1);
+      // Update the dashboard in place, so the page doesn't jump to the top.
+      setData(await api("/faculty/me/dashboard"));
     } catch (err) {
       setPresentationError(err.message);
     } finally {
@@ -606,7 +607,8 @@ export default function FacultyDashboard() {
         `${item.student_name}'s ${item.milestone_name} was marked as not having taken place. The student can propose new dates.`
       );
 
-      setAttempt((value) => value + 1);
+      // Update the dashboard in place, so the page doesn't jump to the top.
+      setData(await api("/faculty/me/dashboard"));
     } catch (err) {
       setPresentationError(err.message);
     } finally {

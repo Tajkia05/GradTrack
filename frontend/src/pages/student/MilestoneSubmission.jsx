@@ -14,6 +14,8 @@ import PresentationScheduling from "./PresentationScheduling.jsx";
 const MAX_FILE_BYTES = 10 * 1024 * 1024;
 // The most files in one submission, matching the backend.
 const MAX_FILES = 5;
+// How often an open popup checks for updates, such as the committee's answers: every 15 seconds.
+const REFRESH_MS = 15000;
 // The text shown for each status.
 const STATUS_LABELS = { not_started: "Not started", in_progress: "In progress", submitted: "Submitted", under_review: "In review", revision_requested: "Revision requested", approved: "Approved", rejected: "Rejected", document_approved: "Document approved" };
 
@@ -298,6 +300,31 @@ export default function MilestoneSubmission({ milestoneId, milestoneName, onChan
       .catch((err) => { if (!controller.signal.aborted) setLoadError(err.message); });
     // Cancel the request if the popup closes.
     return () => controller.abort();
+  // Run this each time the popup opens or closes.
+  }, [open, milestoneId]);
+
+  // While the popup is open, keep it up to date, so the committee's answers show without reloading the page.
+  useEffect(() => {
+    // Do nothing while it's closed.
+    if (!open) return;
+    // Asks the backend for the latest data, without showing the loading message.
+    function refresh() {
+      // A failed check isn't worth interrupting the popup, so it just tries again next time.
+      api(`/students/me/milestones/${milestoneId}/submission`).then(setData).catch(() => {});
+    }
+    // Checks right away when the student comes back to this tab.
+    function refreshWhenVisible() {
+      // Only when the tab is showing.
+      if (document.visibilityState === "visible") refresh();
+    }
+    // Check again on a timer.
+    const timer = setInterval(refresh, REFRESH_MS);
+    // Check when the tab is shown again.
+    document.addEventListener("visibilitychange", refreshWhenVisible);
+    // Check when the window gets focus again, such as after using another window.
+    window.addEventListener("focus", refresh);
+    // Stop checking when the popup closes.
+    return () => { clearInterval(timer); document.removeEventListener("visibilitychange", refreshWhenVisible); window.removeEventListener("focus", refresh); };
   // Run this each time the popup opens or closes.
   }, [open, milestoneId]);
 

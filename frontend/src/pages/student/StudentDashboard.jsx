@@ -173,6 +173,22 @@ export default function StudentDashboard() {
     return () => controller.abort();
   }, [attempt]);
 
+  // Updates the cards when the student comes back to this tab, so changes made by others show without reloading the page.
+  useEffect(() => {
+    // Asks the backend for the latest dashboard, without showing the loading message.
+    function refresh() {
+      // Only when the tab is showing. A failed check just waits for the next one.
+      if (document.visibilityState === "visible") api("/students/me/milestones").then(setData).catch(() => {});
+    }
+    // Check when the tab is shown again.
+    document.addEventListener("visibilitychange", refresh);
+    // Check when the window gets focus again, such as after using another window.
+    window.addEventListener("focus", refresh);
+    // Stop checking when the page closes.
+    return () => { document.removeEventListener("visibilitychange", refresh); window.removeEventListener("focus", refresh); };
+  // The empty list means this only starts once.
+  }, []);
+
   // Reloads the milestones and GPA without showing the loading message.
   function refreshDashboard() {
     // Ask the backend for the latest dashboard.
